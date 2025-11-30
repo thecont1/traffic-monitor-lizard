@@ -36,3 +36,4 @@ venv.bak/
 # Local secrets for maps demo
 .env
 config.js
+WARP.md
