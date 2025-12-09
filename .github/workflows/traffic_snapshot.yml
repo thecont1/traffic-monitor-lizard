@@ -1,7 +1,8 @@
 name: Bangalore Traffic Snapshot
 on:
   schedule:
-    - cron: "40 * * * *"   # primary (HH:15 IST)
+    - cron: "10 * * * *"   # primary trigger
+    - cron: "40 * * * *"   # backup trigger
   workflow_dispatch: {}
 
 concurrency:
