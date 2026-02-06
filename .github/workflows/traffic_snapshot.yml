@@ -32,8 +32,7 @@ jobs:
 run: |
         if [ ! -d ".venv" ]; then
                   uv venv .venv
-        fi                fi
-      - name: Install dependencies (using uv in venv)
+        fi      - name: Install dependencies (using uv in venv)
         run: uv pip install -r requirements.txt --python .venv/bin/python
 
       - name: Run traffic snapshot and append to CSV
