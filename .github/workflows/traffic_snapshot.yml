@@ -28,10 +28,11 @@ jobs:
           restore-keys: |
             venv-${{ runner.os }}-
 
-      - name: Create venv (idempotent)
+      - name: Create venv (always)
         run: |
-          # Always create/refresh the venv so we know it exists
-          uv venv .venv
+          if [ ! -d .venv ]; then
+            uv venv .venv
+          fi
 
       - name: Install dependencies (using uv in venv)
         run: uv pip install -r requirements.txt --python .venv
