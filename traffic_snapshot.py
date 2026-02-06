@@ -15,6 +15,9 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from openlocationcode import openlocationcode as olc
 from timezonefinder import TimezoneFinder
+
+# Import data manager for archival functionality
+from data_manager import get_merged_data, maintain_active_file, ACTIVE_FILE
 global locations_data, referenceLatitude, referenceLongitude
 LOCATION_GLOB = "csv-locations*.csv"
 _location_matches = sorted(glob.glob(LOCATION_GLOB))
@@ -40,7 +43,7 @@ except ValueError as exc:
     ) from exc
 locations_df = pd.read_csv(locations_data)
 routes_df = pd.read_csv("csv-routes.csv")
-out_file = "csv-bangalore_traffic"
+out_file = ACTIVE_FILE  # Use data manager's constant
 tf = TimezoneFinder()
 
 @lru_cache(maxsize=1)
@@ -179,7 +182,7 @@ def transformed_data(df_in):
     df_traffic = df_in.copy()
     df_traffic['year'] = pd.to_datetime(df_traffic['date']).dt.year
     df_traffic['month'] = pd.to_datetime(df_traffic['date']).dt.month
-    df_traffic['date'] = pd.to_datetime(df_traffic['date']).dt.day
+    df_traffic['day'] = pd.to_datetime(df_traffic['date']).dt.day
     df_traffic['hour'] = pd.to_datetime(df_traffic['time'], format='%H:%M', errors='coerce').dt.hour
     df_traffic['day_of_week'] = pd.to_datetime(df_traffic['date']).dt.day_name()
     df_traffic['avg_speed'] = round(df_traffic['distance'] / (df_traffic['duration'] / 60), 2)
@@ -187,9 +190,13 @@ def transformed_data(df_in):
     df_traffic['destination'] = df_traffic['route_code'].str.split('|').str[1]
     df_traffic['origin'] = df_traffic['origin'].map(locations_df.set_index('plus_code')['location'])
     df_traffic['destination'] = df_traffic['destination'].map(locations_df.set_index('plus_code')['location'])
-    df_traffic = df_traffic[['year', 'month', 'date', 'hour', 'day_of_week', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
+    df_traffic = df_traffic[['year', 'month', 'day', 'hour', 'day_of_week', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
     df_traffic = df_traffic.sort_values('avg_speed', ascending=True).reset_index(drop=True)
     return df_traffic
+
+def get_full_dataframe():
+    """Load merged data from active file and archives for analysis."""
+    return get_merged_data()
 
 def main():
     driver = create_driver(headless=True)
@@ -232,16 +239,22 @@ def main():
     df["distance"] = df["distance"].astype(float)
     df["duration"] = df["duration"].astype(int)
 
-    raw_path = out_file + ".csv"
+    raw_path = out_file
     if os.path.exists(raw_path):
         df.to_csv(raw_path, mode="a", header=False, index=False)
     else:
         df.to_csv(raw_path, mode="w", header=df.columns, index=False)
 
+    # Run archival maintenance to keep active file within size limits
+    try:
+        maintain_active_file()
+    except Exception as e:
+        print(f"Warning: Archival maintenance failed: {e}", file=sys.stderr)
+
     df_traffic = df.copy()
     df_traffic['year'] = pd.to_datetime(df_traffic['date']).dt.year
     df_traffic['month'] = pd.to_datetime(df_traffic['date']).dt.month
-    df_traffic['date'] = pd.to_datetime(df_traffic['date']).dt.day
+    df_traffic['day'] = pd.to_datetime(df_traffic['date']).dt.day
     df_traffic['hour'] = pd.to_datetime(df_traffic['time'], format='%H:%M', errors='coerce').dt.hour
     df_traffic['avg_speed'] = round(df_traffic['distance'] / (df_traffic['duration'] / 60), 2)
     df_traffic['origin'] = df_traffic['route_code'].str.split('|').str[0]
@@ -249,7 +262,7 @@ def main():
     df_traffic = df_traffic.sort_values('avg_speed', ascending=True).reset_index(drop=True)
     df_traffic['origin'] = df_traffic['origin'].map(locations_df.set_index('plus_code')['location'])
     df_traffic['destination'] = df_traffic['destination'].map(locations_df.set_index('plus_code')['location'])
-    df_traffic = df_traffic[['year', 'month', 'date', 'hour', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
+    df_traffic = df_traffic[['year', 'month', 'day', 'hour', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
 
     logs = df_traffic[df_traffic['duration'] == df_traffic['duration'].max()]
     print(f"{logs['hour'].iloc[0]}hrs [traffic_snapshot] {logs['duration'].iloc[0]} mins @ {logs['avg_speed'].iloc[0]} Km/hr (\u2192 {logs['destination'].iloc[0]})")    
