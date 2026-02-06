@@ -20,21 +20,13 @@ jobs:
         with:
           version: latest
 
-      - name: Cache uv venv
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            venv-${{ runner.os }}-
-
-      - name: Create venv (always refresh)
+      - name: Create venv (always fresh)
         run: |
           rm -rf .venv
           uv venv .venv
 
-      - name: Install dependencies (using uv in venv)
-        run: uv pip install -r requirements.txt --python .venv
+      - name: Install dependencies
+        run: .venv/bin/python -m pip install -r requirements.txt
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
