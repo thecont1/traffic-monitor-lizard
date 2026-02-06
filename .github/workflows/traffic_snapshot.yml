@@ -30,12 +30,11 @@ jobs:
 
       - name: Create venv (idempotent)
         run: |
-          if [ ! -d ".venv" ]; then
-            uv venv .venv
-          fi
+          # Always create/refresh the venv so we know it exists
+          uv venv .venv
 
       - name: Install dependencies (using uv in venv)
-        run: uv pip install -r requirements.txt
+        run: uv pip install -r requirements.txt --python .venv
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
