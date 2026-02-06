@@ -35,7 +35,7 @@ jobs:
           fi
 
       - name: Install dependencies (using uv in venv)
-        run: uv pip install -r requirements.txt --python .venv/bin/python
+        run: uv pip install -r requirements.txt
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
