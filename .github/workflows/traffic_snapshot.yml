@@ -43,13 +43,17 @@ jobs:
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
-      - name: Deduplicate CSV and commit
+      - name: Run archival maintenance
+        run: |
+          .venv/bin/python archive_data.py
+
+      - name: Deduplicate and commit
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          # Dedup by (date,time,route_code)
+          # Dedup by (date,time,route_code) - also dedup archive files
           tmpfile=$(mktemp)
           awk -F, '!seen[$1 FS $2 FS $3]++' csv-bangalore_traffic.csv > "$tmpfile" && mv "$tmpfile" csv-bangalore_traffic.csv
-          git add csv-bangalore_traffic.csv || true
+          git add csv-bangalore_traffic.csv archive/ || true
           git commit -m "${{ steps.snapshot.outputs.message }}" || echo "No changes"
           git push || true
