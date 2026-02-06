@@ -32,7 +32,7 @@ jobs:
 run: |
         if [ ! -d ".venv" ]; then
                   uv venv .venv
-                          fi
+        fi                fi
       - name: Install dependencies (using uv in venv)
         run: uv pip install -r requirements.txt --python .venv/bin/python
 
