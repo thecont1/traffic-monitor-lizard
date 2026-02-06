@@ -26,7 +26,7 @@ jobs:
           uv venv .venv
 
       - name: Install dependencies
-        run: .venv/bin/python -m pip install -r requirements.txt
+        run: uv sync
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
