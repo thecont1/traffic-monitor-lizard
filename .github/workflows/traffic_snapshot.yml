@@ -20,24 +20,29 @@ jobs:
         with:
           version: latest
 
+      - name: Cache uv venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            venv-${{ runner.os }}-
+
       - name: Create venv (always fresh)
         run: |
           rm -rf .venv
           uv venv .venv
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Install dependencies (using uv)
+        run: uv pip install -r requirements.txt --python .venv
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
-          # Run script, save output to temp file
           .venv/bin/python traffic_snapshot.py > /tmp/snapshot_output.txt
-          # Extract all lines except last as CSV data, append to file
           head -n -1 /tmp/snapshot_output.txt >> csv-bangalore_traffic.csv
-          # Extract last line as commit message
           message="$(tail -n 1 /tmp/snapshot_output.txt)"
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
@@ -46,7 +51,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          # Dedup by (date,time,route_code)
           tmpfile=$(mktemp)
           awk -F, '!seen[$1 FS $2 FS $3]++' csv-bangalore_traffic.csv > "$tmpfile" && mv "$tmpfile" csv-bangalore_traffic.csv
           git add csv-bangalore_traffic.csv || true
