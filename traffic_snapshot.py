@@ -232,16 +232,15 @@ def main():
     df["distance"] = df["distance"].astype(float)
     df["duration"] = df["duration"].astype(int)
 
-    raw_path = out_file + ".csv"
-    if os.path.exists(raw_path):
-        df.to_csv(raw_path, mode="a", header=False, index=False)
-    else:
-        df.to_csv(raw_path, mode="w", header=df.columns, index=False)
+    # Output CSV rows to stdout (without header) for workflow to capture
+    for _, row in df.iterrows():
+        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']}")
 
+    # Prepare transformed data for commit message (find slowest route)
     df_traffic = df.copy()
     df_traffic['year'] = pd.to_datetime(df_traffic['date']).dt.year
     df_traffic['month'] = pd.to_datetime(df_traffic['date']).dt.month
-    df_traffic['date'] = pd.to_datetime(df_traffic['date']).dt.day
+    df_traffic['day'] = pd.to_datetime(df_traffic['date']).dt.day
     df_traffic['hour'] = pd.to_datetime(df_traffic['time'], format='%H:%M', errors='coerce').dt.hour
     df_traffic['avg_speed'] = round(df_traffic['distance'] / (df_traffic['duration'] / 60), 2)
     df_traffic['origin'] = df_traffic['route_code'].str.split('|').str[0]
@@ -249,10 +248,11 @@ def main():
     df_traffic = df_traffic.sort_values('avg_speed', ascending=True).reset_index(drop=True)
     df_traffic['origin'] = df_traffic['origin'].map(locations_df.set_index('plus_code')['location'])
     df_traffic['destination'] = df_traffic['destination'].map(locations_df.set_index('plus_code')['location'])
-    df_traffic = df_traffic[['year', 'month', 'date', 'hour', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
+    df_traffic = df_traffic[['year', 'month', 'day', 'hour', 'origin', 'destination', 'duration', 'distance', 'avg_speed']]
 
+    # Print commit message as LAST output (captured by workflow)
     logs = df_traffic[df_traffic['duration'] == df_traffic['duration'].max()]
-    print(f"{logs['hour'].iloc[0]}hrs [traffic_snapshot] {logs['duration'].iloc[0]} mins @ {logs['avg_speed'].iloc[0]} Km/hr (\u2192 {logs['destination'].iloc[0]})")    
+    print(f"{logs['hour'].iloc[0]}hrs [traffic_snapshot] {logs['duration'].iloc[0]} mins @ {logs['avg_speed'].iloc[0]} Km/hr (\u2192 {logs['destination'].iloc[0]})", flush=True)
 
     return 0
 

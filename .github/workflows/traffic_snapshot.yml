@@ -34,12 +34,17 @@ jobs:
       - name: Install dependencies (using uv in venv)
         run: uv pip install -r requirements.txt --python .venv/bin/python
 
-      - name: Run and capture snapshot message
+      - name: Run traffic snapshot and append to CSV
         id: snapshot
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
-          message="$(.venv/bin/python traffic_snapshot.py | tail -n1)"
+          # Run script, save output to temp file
+          .venv/bin/python traffic_snapshot.py > /tmp/snapshot_output.txt
+          # Extract all lines except last as CSV data, append to file
+          head -n -1 /tmp/snapshot_output.txt >> csv-bangalore_traffic.csv
+          # Extract last line as commit message
+          message="$(tail -n 1 /tmp/snapshot_output.txt)"
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
