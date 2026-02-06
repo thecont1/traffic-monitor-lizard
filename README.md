@@ -32,42 +32,44 @@ All of this happens automatically using web automation - no manual checking requ
 ### Prerequisites
 
 - Python 3.8 or higher
+- [uv](https://github.com/astral-sh/uv) (Python package manager)
 - Chrome browser (for web automation)
 - Internet connection (for Google Maps access)
 
 ### Step-by-Step Setup
 
-1. **Clone or download** the project files to your computer
-2. **Open terminal/command prompt** and navigate to the project folder
-3. **Create a virtual environment** (recommended):
+1. **Clone the repository** and navigate to the project folder:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   git clone https://github.com/<your-username>/blr-traffic-monitor.git
+   cd blr-traffic-monitor
    ```
-4. **Install dependencies**:
+   *(Replace `<your-username>` with the actual GitHub username or use the full repository URL)*
+
+2. **Setup environment with uv** (creates venv and installs dependencies):
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
-5. **Verify installation**:
+
+3. **Verify installation**:
    ```bash
-   python -c "import pandas, selenium, matplotlib, seaborn; print('All dependencies installed!')"
+   uv run python -c "import pandas, selenium; print('All dependencies installed!')"
    ```
 
 ## Quick Start
 
 ### First Run
 
-1. **Open the main script** (`traffic_monitor.py`) in your IDE or run it from terminal
-2. **Run the script**:
    ```bash
-   python traffic_monitor.py
+   uv run python traffic_snapshot.py
    ```
-3. The script will:
+
+The script will:
+
    - Open Chrome browser automatically
    - Visit Google Maps for each route
    - Extract travel times and distances
-   - Save data to CSV files
-   - Generate plots and analysis
+   - Output CSV rows to stdout (for workflow capture)
+   - Print a summary message
 
 ### What You'll See
 
@@ -106,18 +108,11 @@ routes_df = pd.DataFrame({
 
 ### Data Collection Settings
 
-In `traffic_monitor.py`, customize:
-
-```python
-# How often to check traffic (in seconds)
-CHECK_INTERVAL = 3600  # Check every hour
-
-# How many times to run
-MAX_ITERATIONS = 100   # Run 100 times (adjust as needed)
-
-# Wait time between route checks
-WAIT_BETWEEN_ROUTES = 5  # Wait 5 seconds between routes
-```
+In `traffic_snapshot.py`, the script uses stream-based output:
+- Outputs new data rows to stdout (one CSV line per route)
+- Workflow captures and appends to CSV (no memory overhead)
+- Prints summary as final line (for commit message)
+- Deduplication handled by workflow using awk
 
 ## Usage
 
@@ -125,10 +120,10 @@ WAIT_BETWEEN_ROUTES = 5  # Wait 5 seconds between routes
 
 1. **Run the collector**:
    ```bash
-   python traffic_monitor.py
+   uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
    ```
 
-2. **Monitor progress** - the script will print updates as it collects data
+2. **Monitor progress** - the script will print CSV rows, then a summary message
 
 3. **Stop anytime** - press Ctrl+C to stop early
 
@@ -138,8 +133,14 @@ Open [traffic_visual.ipynb](cci:7://file:///Users/home/DEV/MY%20PROJECTS/blr-tra
 
 1. **Load and process data**:
    ```python
-   # Load raw traffic data
-   master_df = pd.read_csv("csv-bangalore_traffic.csv")
+   from data_manager import get_merged_data
+   
+   # Load merged data (active + archives for full history)
+   master_df = get_merged_data()
+   
+   # Or load only recent data (last 30 days)
+   from data_manager import get_active_data
+   master_df = get_active_data()
    
    # Process into analysis-ready format
    df = transformed_data(master_df)
