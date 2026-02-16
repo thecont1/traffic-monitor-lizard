@@ -41,6 +41,9 @@ jobs:
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
+      - name: Fix same-hour timestamp collisions
+        run: .venv/bin/python fix_timestamps.py --apply
+
       - name: Deduplicate CSV and commit
         run: |
           git config user.name "github-actions"
