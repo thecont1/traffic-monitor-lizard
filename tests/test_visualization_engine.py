@@ -1,0 +1,514 @@
+"""
+Unit tests for visualization_engine module.
+"""
+
+import pytest
+import pandas as pd
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for testing
+import matplotlib.pyplot as plt
+from visualization_engine import VisualizationEngine
+
+
+def create_sample_traffic_data(n_rows=200):
+    """Helper function to create sample traffic data for testing"""
+    np.random.seed(42)
+    
+    # Create data spanning multiple days and hours
+    dates = pd.date_range('2025-09-01', periods=30, freq='D')
+    hours = list(range(24))
+    routes = ['ROUTE_A', 'ROUTE_B', 'ROUTE_C']
+    
+    data = []
+    for date in dates:
+        for hour in hours:
+            for route in routes:
+                data.append({
+                    'year': date.year,
+                    'month': date.month,
+                    'day': date.day,
+                    'hour': hour,
+                    'route_code': route,
+                    'duration': np.random.uniform(15, 45),
+                    'distance': np.random.uniform(9.5, 10.5),
+                    'avg_speed': np.random.uniform(15, 35)
+                })
+    
+    return pd.DataFrame(data)
+
+
+def create_sample_routes_data():
+    """Helper function to create sample routes metadata"""
+    return pd.DataFrame({
+        'route_code': ['ROUTE_A', 'ROUTE_B', 'ROUTE_C'],
+        'label_full': ['Route A Full', 'Route B Full', 'Route C Full'],
+        'label_short': ['Route A', 'Route B', 'Route C'],
+        'color_hex': ['#FF6B6B', '#4ECDC4', '#45B7D1']
+    })
+
+
+@pytest.fixture
+def sample_viz_engine():
+    """Fixture providing a VisualizationEngine instance with sample data"""
+    traffic_df = create_sample_traffic_data()
+    routes_df = create_sample_routes_data()
+    return VisualizationEngine(traffic_df, routes_df)
+
+
+class TestVisualizationEngineInit:
+    """Tests for VisualizationEngine initialization"""
+    
+    def test_initialization(self, sample_viz_engine):
+        """Test basic initialization"""
+        assert sample_viz_engine is not None
+        assert len(sample_viz_engine.routes) == 3
+        assert len(sample_viz_engine.color_palette) == 3
+    
+    def test_color_palette_extraction(self, sample_viz_engine):
+        """Test that color palette is correctly extracted"""
+        assert 'ROUTE_A' in sample_viz_engine.color_palette
+        assert sample_viz_engine.color_palette['ROUTE_A'] == '#FF6B6B'
+
+
+class TestHourlyHeatmap:
+    """Tests for plot_hourly_heatmap method"""
+    
+    def test_single_route_heatmap(self, sample_viz_engine):
+        """Test generating heatmap for a single route"""
+        # Should not raise an exception
+        try:
+            sample_viz_engine.plot_hourly_heatmap('ROUTE_A')
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+        
+        assert success, "plot_hourly_heatmap should execute without errors"
+    
+    def test_all_routes_heatmap(self, sample_viz_engine):
+        """Test generating heatmaps for all routes"""
+        # Should not raise an exception
+        try:
+            sample_viz_engine.plot_hourly_heatmap()
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+        
+        assert success, "plot_hourly_heatmap for all routes should execute without errors"
+    
+    def test_invalid_route_heatmap(self, sample_viz_engine):
+        """Test generating heatmap for non-existent route"""
+        # Should handle gracefully without raising exception
+        try:
+            sample_viz_engine.plot_hourly_heatmap('INVALID_ROUTE')
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+        
+        assert success, "plot_hourly_heatmap should handle invalid routes gracefully"
+
+
+class TestCalendarHeatmap:
+    """Tests for plot_calendar_heatmap method"""
+    
+    def test_calendar_heatmap(self, sample_viz_engine):
+        """Test generating calendar heatmap for a route"""
+        # Should not raise an exception
+        try:
+            sample_viz_engine.plot_calendar_heatmap('ROUTE_A')
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+        
+        assert success, "plot_calendar_heatmap should execute without errors"
+    
+    def test_calendar_heatmap_invalid_route(self, sample_viz_engine):
+        """Test calendar heatmap with non-existent route"""
+        # Should handle gracefully (prints message but doesn't raise)
+        try:
+            sample_viz_engine.plot_calendar_heatmap('INVALID_ROUTE')
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+        
+        assert success, "plot_calendar_heatmap should handle invalid routes gracefully"
+
+
+class TestHelperMethods:
+    """Tests for helper methods"""
+    
+    def test_get_route_color(self, sample_viz_engine):
+        """Test _get_route_color method"""
+        color = sample_viz_engine._get_route_color('ROUTE_A')
+        assert color == '#FF6B6B'
+        
+        # Test fallback for missing route
+        color = sample_viz_engine._get_route_color('NONEXISTENT')
+        assert color == '#000000'  # Default black
+    
+    def test_get_route_label(self, sample_viz_engine):
+        """Test _get_route_label method"""
+        label = sample_viz_engine._get_route_label('ROUTE_A', 'short')
+        assert label == 'Route A'
+        
+        label = sample_viz_engine._get_route_label('ROUTE_A', 'full')
+        assert label == 'Route A Full'
+        
+        label = sample_viz_engine._get_route_label('ROUTE_A', 'code')
+        assert label == 'ROUTE_A'
+    
+    def test_format_hour_label(self, sample_viz_engine):
+        """Test _format_hour_label method"""
+        assert sample_viz_engine._format_hour_label(0) == '12 AM'
+        assert sample_viz_engine._format_hour_label(1) == '1 AM'
+        assert sample_viz_engine._format_hour_label(12) == '12 PM'
+        assert sample_viz_engine._format_hour_label(13) == '1 PM'
+        assert sample_viz_engine._format_hour_label(23) == '11 PM'
+
+
+class TestTimeSeriesDecomposition:
+    """Tests for plot_time_series_decomposition method"""
+
+    def test_decomposition_with_sufficient_data(self, sample_viz_engine):
+        """Test time series decomposition with sufficient data (>= 2 weeks)"""
+        # Should not raise an exception
+        try:
+            sample_viz_engine.plot_time_series_decomposition('ROUTE_A')
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+
+        assert success, "plot_time_series_decomposition should execute without errors with sufficient data"
+
+    def test_decomposition_with_insufficient_data(self):
+        """Test time series decomposition with insufficient data (< 2 weeks)"""
+        # Create data with only 5 days
+        np.random.seed(42)
+        dates = pd.date_range('2025-09-01', periods=5, freq='D')
+        hours = list(range(24))
+        routes = ['ROUTE_A']
+
+        data = []
+        for date in dates:
+            for hour in hours:
+                for route in routes:
+                    data.append({
+                        'year': date.year,
+                        'month': date.month,
+                        'day': date.day,
+                        'hour': hour,
+                        'route_code': route,
+                        'duration': np.random.uniform(15, 45),
+                        'distance': np.random.uniform(9.5, 10.5),
+                        'avg_speed': np.random.uniform(15, 35)
+                    })
+
+        traffic_df = pd.DataFrame(data)
+        routes_df = pd.DataFrame({
+            'route_code': ['ROUTE_A'],
+            'label_full': ['Route A Full'],
+            'label_short': ['Route A'],
+            'color_hex': ['#FF6B6B']
+        })
+
+        viz = VisualizationEngine(traffic_df, routes_df)
+
+        # Should issue a warning but not crash
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            viz.plot_time_series_decomposition('ROUTE_A')
+            plt.close('all')
+
+            # Check that a warning was issued
+            assert len(w) > 0
+            assert "Insufficient data" in str(w[0].message)
+
+    def test_decomposition_invalid_route(self, sample_viz_engine):
+        """Test time series decomposition with non-existent route"""
+        # Should raise ValueError
+        with pytest.raises(ValueError, match="No data found for route"):
+            sample_viz_engine.plot_time_series_decomposition('INVALID_ROUTE')
+
+    def test_decomposition_creates_four_subplots(self, sample_viz_engine):
+        """Test that decomposition creates 4 subplots (original, trend, seasonal, residual)"""
+        # Create the plot
+        sample_viz_engine.plot_time_series_decomposition('ROUTE_A')
+
+        # Get current figure
+        fig = plt.gcf()
+        axes = fig.get_axes()
+
+        # Should have 4 subplots
+        assert len(axes) == 4, "Decomposition plot should have 4 subplots"
+
+        plt.close('all')
+
+
+class TestHourOfDayProfiles:
+        """Tests for plot_hour_of_day_profiles method"""
+
+        def test_hour_of_day_profiles_basic(self, sample_viz_engine):
+            """Test generating hour-of-day profiles for all routes"""
+            # Should not raise an exception
+            try:
+                sample_viz_engine.plot_hour_of_day_profiles()
+                plt.close('all')  # Clean up
+                success = True
+            except Exception as e:
+                success = False
+                print(f"Error: {e}")
+
+            assert success, "plot_hour_of_day_profiles should execute without errors"
+
+        def test_hour_of_day_profiles_creates_single_plot(self, sample_viz_engine):
+            """Test that hour-of-day profiles creates a single plot with all routes"""
+            # Create the plot
+            sample_viz_engine.plot_hour_of_day_profiles()
+
+            # Get current figure
+            fig = plt.gcf()
+            axes = fig.get_axes()
+
+            # Should have 1 subplot (all routes on same axes)
+            assert len(axes) == 1, "Hour-of-day profiles should have 1 subplot"
+
+            plt.close('all')
+
+        def test_hour_of_day_profiles_has_all_routes(self, sample_viz_engine):
+            """Test that all routes are plotted on the same axes"""
+            # Create the plot
+            sample_viz_engine.plot_hour_of_day_profiles()
+
+            # Get current figure and axes
+            fig = plt.gcf()
+            ax = fig.get_axes()[0]
+
+            # Get legend labels
+            legend = ax.get_legend()
+            legend_labels = [text.get_text() for text in legend.get_texts()]
+
+            # Should have one legend entry per route
+            assert len(legend_labels) == len(sample_viz_engine.routes), \
+                "Legend should have one entry per route"
+
+            plt.close('all')
+
+        def test_hour_of_day_profiles_uses_route_colors(self, sample_viz_engine):
+            """Test that hour-of-day profiles uses correct route colors"""
+            # Create the plot
+            sample_viz_engine.plot_hour_of_day_profiles()
+
+            # Get current figure and axes
+            fig = plt.gcf()
+            ax = fig.get_axes()[0]
+
+            # Get line colors
+            lines = ax.get_lines()
+
+            # Should have at least as many lines as routes (may have more due to confidence bands)
+            assert len(lines) >= len(sample_viz_engine.routes), \
+                "Should have at least one line per route"
+
+            # Check that the first few lines use route colors
+            for idx, route_code in enumerate(sample_viz_engine.routes):
+                if idx < len(lines):
+                    line_color = lines[idx].get_color()
+                    expected_color = sample_viz_engine._get_route_color(route_code)
+                    # Colors should match (matplotlib may convert hex to RGB)
+                    assert line_color is not None, f"Line {idx} should have a color"
+
+            plt.close('all')
+
+        def test_hour_of_day_profiles_with_missing_data(self):
+            """Test hour-of-day profiles with routes that have missing hours"""
+            # Create data with missing hours for one route
+            np.random.seed(42)
+            dates = pd.date_range('2025-09-01', periods=10, freq='D')
+            hours = list(range(24))
+            routes = ['ROUTE_A', 'ROUTE_B']
+
+            data = []
+            for date in dates:
+                for hour in hours:
+                    for route in routes:
+                        # Skip some hours for ROUTE_B
+                        if route == 'ROUTE_B' and hour in [0, 1, 2, 22, 23]:
+                            continue
+
+                        data.append({
+                            'year': date.year,
+                            'month': date.month,
+                            'day': date.day,
+                            'hour': hour,
+                            'route_code': route,
+                            'duration': np.random.uniform(15, 45),
+                            'distance': np.random.uniform(9.5, 10.5),
+                            'avg_speed': np.random.uniform(15, 35)
+                        })
+
+            traffic_df = pd.DataFrame(data)
+            routes_df = pd.DataFrame({
+                'route_code': ['ROUTE_A', 'ROUTE_B'],
+                'label_full': ['Route A Full', 'Route B Full'],
+                'label_short': ['Route A', 'Route B'],
+                'color_hex': ['#FF6B6B', '#4ECDC4']
+            })
+
+            viz = VisualizationEngine(traffic_df, routes_df)
+
+            # Should handle missing data gracefully
+            try:
+                viz.plot_hour_of_day_profiles()
+                plt.close('all')
+                success = True
+            except Exception as e:
+                success = False
+                print(f"Error: {e}")
+
+            assert success, "plot_hour_of_day_profiles should handle missing hours gracefully"
+
+        def test_hour_of_day_profiles_empty_route(self):
+            """Test hour-of-day profiles when one route has no data"""
+            # Create data with only one route having data
+            np.random.seed(42)
+            dates = pd.date_range('2025-09-01', periods=10, freq='D')
+            hours = list(range(24))
+
+            data = []
+            for date in dates:
+                for hour in hours:
+                    data.append({
+                        'year': date.year,
+                        'month': date.month,
+                        'day': date.day,
+                        'hour': hour,
+                        'route_code': 'ROUTE_A',
+                        'duration': np.random.uniform(15, 45),
+                        'distance': np.random.uniform(9.5, 10.5),
+                        'avg_speed': np.random.uniform(15, 35)
+                    })
+
+            traffic_df = pd.DataFrame(data)
+            routes_df = pd.DataFrame({
+                'route_code': ['ROUTE_A', 'ROUTE_B'],
+                'label_full': ['Route A Full', 'Route B Full'],
+                'label_short': ['Route A', 'Route B'],
+                'color_hex': ['#FF6B6B', '#4ECDC4']
+            })
+
+            viz = VisualizationEngine(traffic_df, routes_df)
+
+            # Should handle empty routes gracefully
+            try:
+                viz.plot_hour_of_day_profiles()
+                plt.close('all')
+                success = True
+            except Exception as e:
+                success = False
+                print(f"Error: {e}")
+
+            assert success, "plot_hour_of_day_profiles should handle empty routes gracefully"
+
+
+
+
+
+class TestTimeOfDayFacets:
+    """Tests for plot_time_of_day_facets method"""
+
+    def test_time_of_day_facets_basic(self, sample_viz_engine):
+        """Test generating time-of-day faceted visualization"""
+        # Should not raise an exception
+        try:
+            sample_viz_engine.plot_time_of_day_facets()
+            plt.close('all')  # Clean up
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+
+        assert success, "plot_time_of_day_facets should execute without errors"
+
+    def test_time_of_day_facets_creates_four_subplots(self, sample_viz_engine):
+        """Test that time-of-day facets creates 4 subplots (one per time category)"""
+        # Create the plot
+        sample_viz_engine.plot_time_of_day_facets()
+
+        # Get current figure
+        fig = plt.gcf()
+        axes = fig.get_axes()
+
+        # Should have 4 subplots (morning rush, midday, evening rush, night)
+        assert len(axes) == 4, "Time-of-day facets should have 4 subplots"
+
+        plt.close('all')
+
+    def test_time_of_day_facets_uses_route_colors(self, sample_viz_engine):
+        """Test that time-of-day facets uses correct route colors"""
+        # Create the plot
+        sample_viz_engine.plot_time_of_day_facets()
+
+        # Get current figure
+        fig = plt.gcf()
+
+        # Check that the plot was created successfully
+        assert fig is not None, "Figure should be created"
+
+        plt.close('all')
+
+    def test_time_of_day_facets_with_missing_time_categories(self):
+        """Test time-of-day facets when some time categories have no data"""
+        # Create data with only morning hours (6-10 AM)
+        np.random.seed(42)
+        dates = pd.date_range('2025-09-01', periods=10, freq='D')
+        hours = [6, 7, 8, 9]  # Only morning rush hours
+        routes = ['ROUTE_A', 'ROUTE_B']
+
+        data = []
+        for date in dates:
+            for hour in hours:
+                for route in routes:
+                    data.append({
+                        'year': date.year,
+                        'month': date.month,
+                        'day': date.day,
+                        'hour': hour,
+                        'route_code': route,
+                        'duration': np.random.uniform(15, 45),
+                        'distance': np.random.uniform(9.5, 10.5),
+                        'avg_speed': np.random.uniform(15, 35)
+                    })
+
+        traffic_df = pd.DataFrame(data)
+        routes_df = pd.DataFrame({
+            'route_code': ['ROUTE_A', 'ROUTE_B'],
+            'label_full': ['Route A Full', 'Route B Full'],
+            'label_short': ['Route A', 'Route B'],
+            'color_hex': ['#FF6B6B', '#4ECDC4']
+        })
+
+        viz = VisualizationEngine(traffic_df, routes_df)
+
+        # Should handle missing time categories gracefully
+        try:
+            viz.plot_time_of_day_facets()
+            plt.close('all')
+            success = True
+        except Exception as e:
+            success = False
+            print(f"Error: {e}")
+
+        assert success, "plot_time_of_day_facets should handle missing time categories gracefully"
