@@ -55,6 +55,17 @@ def get_reference_tz():
 def get_reference_now():
     return datetime.now(get_reference_tz())
 
+
+def get_retry_policy(now_ref: datetime) -> tuple[int, int]:
+    """
+    Return (max_retries, retry_delay_seconds) based on local time.
+
+    Critical traffic-study window 06:00-09:59 gets more retries.
+    """
+    if 6 <= now_ref.hour <= 9:
+        return 5, 90
+    return 3, 60
+
 def create_driver(headless: bool = True) -> webdriver.Chrome:
     opts = Options()
     # Keep images disabled for speed
@@ -195,6 +206,7 @@ def main():
     driver = create_driver(headless=True)
     df = pd.DataFrame()
     now_ref = get_reference_now()
+    max_retries, retry_delay = get_retry_policy(now_ref)
     date_now = now_ref.date()
     time_now = now_ref.strftime("%H:%M")
     try:
@@ -208,7 +220,13 @@ def main():
             origin = origin_row.iloc[0]
             destination = dest_row.iloc[0]
 
-            travel_time, travel_distance = get_traffic_report(driver, origin, destination)
+            travel_time, travel_distance = get_traffic_report(
+                driver,
+                origin,
+                destination,
+                max_retries=max_retries,
+                retry_delay=retry_delay,
+            )
 
             new_row = {
                 "date": date_now,

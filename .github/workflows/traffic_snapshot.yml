@@ -1,8 +1,8 @@
 name: Bangalore Traffic Snapshot
 on:
   schedule:
-    - cron: "10 * * * *"   # primary (HH:40 IST)
-    - cron: "40 * * * *"   # backup  (HH:10 IST)
+    - cron: "10 * * * *"   # UTC :10 (= IST :40)
+    - cron: "40 * * * *"   # UTC :40 (= IST next-hour :10)
   workflow_dispatch: {}
 
 concurrency:
@@ -30,6 +30,34 @@ jobs:
       - name: Install dependencies (using uv)
         run: uv sync
 
+      - name: Decide whether to run daily dedup window
+        id: dedup_window
+        run: |
+          now_ist="$(TZ=Asia/Kolkata date +%H:%M)"
+          hour_ist="$(TZ=Asia/Kolkata date +%H)"
+          minute_ist="$(TZ=Asia/Kolkata date +%M)"
+          should_run=false
+          if { [ "$hour_ist" = "01" ] || [ "$hour_ist" = "13" ]; } && [ "$minute_ist" -ge 10 ] && [ "$minute_ist" -le 25 ]; then
+            should_run=true
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            should_run=true
+          fi
+          echo "now_ist=$now_ist"
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+
+      - name: Daily deduplication (cycle-aware)
+        id: dedup
+        if: steps.dedup_window.outputs.should_run == 'true'
+        run: |
+          dedup_output="$(.venv/bin/python fix_timestamps.py --apply)"
+          echo "$dedup_output"
+          removed="$(printf '%s\n' "$dedup_output" | awk -F: '/Rows removed/ {gsub(/[ ,]/, "", $2); print $2; exit}')"
+          if [ -z "$removed" ]; then
+            removed=0
+          fi
+          echo "removed=$removed" >> "$GITHUB_OUTPUT"
+
       - name: Run traffic snapshot and append to CSV
         id: snapshot
         run: |
@@ -41,16 +69,30 @@ jobs:
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
-      - name: Fix same-hour timestamp collisions
-        run: .venv/bin/python fix_timestamps.py --apply
+      - name: Compose commit message
+        id: commit_message
+        run: |
+          if [ "${{ steps.dedup_window.outputs.should_run }}" = "true" ]; then
+            removed="${{ steps.dedup.outputs.removed }}"
+            echo "message=$removed records removed" >> "$GITHUB_OUTPUT"
+          else
+            echo "message=${{ steps.snapshot.outputs.message }}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Deduplicate CSV and commit
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          tmpfile=$(mktemp)
-          awk -F, '!seen[$1 FS $2 FS $3]++' csv-bangalore_traffic.csv > "$tmpfile" && mv "$tmpfile" csv-bangalore_traffic.csv
-          git add csv-bangalore_traffic.csv || true
-          git commit -m "${{ steps.snapshot.outputs.message }}" || echo "No changes"
+
+          # Rebase first to reduce race-related commit/push failures.
           git pull --rebase origin main || true
-          git push || (git pull --rebase origin main && git push) || true
+
+          git add csv-bangalore_traffic.csv || true
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "${{ steps.commit_message.outputs.message }}"
+          git push origin HEAD:main || (git pull --rebase origin main && git push origin HEAD:main) || true

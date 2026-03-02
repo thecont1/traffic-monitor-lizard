@@ -1,10 +1,14 @@
 """
-fix_timestamps.py – Fix same-hour timestamp collisions in traffic data.
+fix_timestamps.py – Cycle-aware smart deduplication for traffic data.
 
-When two recordings land in the same hour for the same route (e.g. 09:04 and
-09:28), the earlier one was a delayed run intended for the previous hour.  This
-script reassigns it to {prev_hour}:50 so each hour has at most one reading per
-route.
+Ensures only one reading per cycle per route, where a cycle starts at HH:10
+and ends at (HH+1):09. This captures delayed HH:40 backup runs that spill into
+the next clock hour while still preserving one data point per intended hour.
+
+Selection Strategy (in priority order):
+1. Prefer readings closer to intended cycle offsets (0 or 30 minutes)
+2. If both equally close, prefer the later reading (more recent data)
+3. Remove all other readings in that cycle
 
 Usage:
     python fix_timestamps.py              # dry-run (preview only)
@@ -18,7 +22,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 CSV_PATH = Path(__file__).parent / "csv-bangalore_traffic.csv"
-REASSIGN_MINUTE = 50  # earlier collision gets snapped to {prev_hour}:50
+CYCLE_START_MINUTE = 10
+TARGET_OFFSETS = [0, 30]  # :10 and :40 within a cycle starting at :10
 
 
 def load_data(path: Path) -> list[dict]:
@@ -33,103 +38,148 @@ def write_data(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
         writer.writerows(rows)
 
 
-def fix_collisions(rows: list[dict]) -> tuple[list[dict], list[str]]:
-    """Find and fix same-hour collisions, returning (fixed_rows, log_lines)."""
+def parse_row_datetime(row: dict) -> datetime:
+    """Parse row date/time into a datetime."""
+    return datetime.strptime(f"{row['date']} {row['time']}", "%Y-%m-%d %H:%M")
 
-    # Index: (date, hour, route_code) -> list of (original_index, time_str)
-    buckets: dict[tuple, list[tuple[int, str]]] = defaultdict(list)
+
+def get_cycle_start(ts: datetime) -> datetime:
+    """
+    Map a timestamp to its cycle start.
+
+    A cycle starts at HH:10 and ends at (HH+1):09. This captures delayed
+    HH:40 executions that spill into the next clock hour.
+    """
+    cycle = ts.replace(minute=CYCLE_START_MINUTE, second=0, microsecond=0)
+    if ts.minute < CYCLE_START_MINUTE:
+        cycle -= timedelta(hours=1)
+    return cycle
+
+
+def cycle_distance_to_target(ts: datetime, cycle_start: datetime) -> int:
+    """Distance in minutes to the nearest intended offset (:10 or :40)."""
+    offset = int((ts - cycle_start).total_seconds() // 60)
+    return min(abs(offset - target) for target in TARGET_OFFSETS)
+
+
+def select_best_reading(entries: list[tuple[int, datetime, datetime]]) -> int:
+    """
+    Select the best reading from multiple entries in the same cycle.
+    
+    Returns the index of the entry to keep.
+    
+    Strategy:
+    1. Prefer readings closest to intended cycle offsets (:10 or :40)
+    2. If tied, prefer later reading (more recent)
+    """
+    if len(entries) == 1:
+        return entries[0][0]
+    
+    # Calculate scores within the same cycle bucket
+    scored_entries = []
+    for idx, ts, cycle_start in entries:
+        distance = cycle_distance_to_target(ts, cycle_start)
+        # Score: (distance_to_target, -timestamp)
+        # Lower distance is better; for ties keep the later reading.
+        scored_entries.append((distance, -ts.timestamp(), idx, ts.strftime("%H:%M")))
+    
+    # Sort by score (best first)
+    scored_entries.sort()
+    
+    # Return index of best entry
+    return scored_entries[0][2]
+
+
+def deduplicate_same_cycle(rows: list[dict]) -> tuple[list[dict], list[str]]:
+    """
+    Remove duplicate readings in the same cycle, keeping the best one.
+    
+    Returns (cleaned_rows, log_lines).
+    """
+    # Index: (cycle_date, cycle_hour, route_code) -> list of
+    # (original_index, timestamp, cycle_start)
+    buckets: dict[tuple, list[tuple[int, datetime, datetime]]] = defaultdict(list)
     for i, row in enumerate(rows):
-        hour = row["time"].split(":")[0]
-        key = (row["date"], hour, row["route_code"])
-        buckets[key].append((i, row["time"]))
-
-    # Track which (date, hour, route_code) slots are occupied
-    occupied: set[tuple] = set()
-    for key in buckets:
-        occupied.add(key)
-
-    changes: list[tuple[int, str, str, str, str]] = []  # (idx, route, old_dt, new_date, new_time)
-
+        ts = parse_row_datetime(row)
+        cycle_start = get_cycle_start(ts)
+        key = (cycle_start.date().isoformat(), f"{cycle_start.hour:02d}", row["route_code"])
+        buckets[key].append((i, ts, cycle_start))
+    
+    # Track which indices to keep
+    indices_to_keep = set()
+    removed_count = 0
+    collision_count = 0
+    examples = []
+    
     for key, entries in buckets.items():
-        if len(set(t for _, t in entries)) < 2:
-            continue  # all same timestamp — no collision
-
-        date_str, hour_str, route = key
-
-        # Find the distinct timestamps, sort to identify the earlier one
-        unique_times = sorted(set(t for _, t in entries))
-        earlier_time = unique_times[0]
-
-        # Compute previous hour slot
-        dt = datetime.strptime(f"{date_str} {earlier_time}", "%Y-%m-%d %H:%M")
-        prev_dt = dt.replace(minute=REASSIGN_MINUTE) - timedelta(hours=1)
-        new_date = prev_dt.strftime("%Y-%m-%d")
-        new_time = prev_dt.strftime("%H:%M")
-        prev_hour = prev_dt.strftime("%H")
-
-        # Check if previous hour is already occupied for this route
-        prev_key = (new_date, prev_hour, route)
-        if prev_key in occupied:
-            changes.append(None)  # marker for skipped
-            # Log will note this was skipped
-            continue
-
-        # Apply: reassign all rows with the earlier timestamp in this bucket
-        for idx, t in entries:
-            if t == earlier_time:
-                changes.append(
-                    (idx, route, f"{date_str} {t}", new_date, new_time)
+        unique_times = set(ts.strftime("%H:%M") for _, ts, _ in entries)
+        
+        if len(unique_times) == 1:
+            # All same timestamp - keep first occurrence only
+            indices_to_keep.add(entries[0][0])
+            if len(entries) > 1:
+                removed_count += len(entries) - 1
+        elif len(unique_times) > 1:
+            # Multiple different timestamps in same cycle - select best
+            collision_count += 1
+            best_idx = select_best_reading(entries)
+            indices_to_keep.add(best_idx)
+            removed_count += len(entries) - 1
+            
+            # Log example
+            if len(examples) < 5:
+                cycle_date, cycle_hour, route = key
+                kept_time = rows[best_idx]["time"]
+                all_times = sorted(unique_times)
+                examples.append(
+                    f"  cycle {cycle_date} {cycle_hour}:10 {route[:15]:15s} → kept {kept_time} from {all_times}"
                 )
-                rows[idx]["date"] = new_date
-                rows[idx]["time"] = new_time
-
-        occupied.add(prev_key)
-
+    
+    # Build cleaned rows
+    cleaned_rows = [row for i, row in enumerate(rows) if i in indices_to_keep]
+    
     # Build log
-    log: list[str] = []
-    skipped = 0
-    fixed = 0
-    seen_corrections: set[str] = set()
-
-    for c in changes:
-        if c is None:
-            skipped += 1
-            continue
-        idx, route, old_dt, new_date, new_time = c
-        correction_key = f"{old_dt} → {new_date} {new_time}"
-        if correction_key not in seen_corrections:
-            seen_corrections.add(correction_key)
-            fixed += 1
-            log.append(f"  {old_dt}  →  {new_date} {new_time}  ({route[:12]}… +{len([x for x in changes if x and x[2]==old_dt])-1} more routes)")
-
-    log.insert(0, f"\nCollisions found: {fixed + skipped}")
-    log.insert(1, f"  Fixed:   {fixed} (across all routes)")
-    log.insert(2, f"  Skipped: {skipped} (previous hour already occupied)")
-    log.insert(3, "")
-    if fixed:
-        log.insert(4, "Corrections:")
-
-    return rows, log
+    log = [
+        f"\nDeduplication Summary:",
+        f"  Total rows before: {len(rows):,}",
+        f"  Total rows after:  {len(cleaned_rows):,}",
+        f"  Rows removed:      {removed_count:,}",
+        f"",
+        f"  Same-cycle collisions found: {collision_count}",
+    ]
+    
+    if examples:
+        log.append("")
+        log.append("Examples of collision resolution:")
+        log.extend(examples)
+    
+    return cleaned_rows, log
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fix same-hour timestamp collisions.")
-    parser.add_argument("--apply", action="store_true", help="Write changes to CSV (default is dry-run)")
+    parser = argparse.ArgumentParser(
+        description="Cycle-aware deduplication: keep one reading per collection cycle per route."
+    )
+    parser.add_argument(
+        "--apply", 
+        action="store_true", 
+        help="Write changes to CSV (default is dry-run)"
+    )
     args = parser.parse_args()
-
+    
     rows = load_data(CSV_PATH)
     fieldnames = ["date", "time", "route_code", "duration", "distance"]
-
-    fixed_rows, log = fix_collisions(rows)
-
+    
+    cleaned_rows, log = deduplicate_same_cycle(rows)
+    
     for line in log:
         print(line)
-
+    
     if args.apply:
         # Sort by date, time, route_code for clean output
-        fixed_rows.sort(key=lambda r: (r["date"], r["time"], r["route_code"]))
-        write_data(CSV_PATH, fixed_rows, fieldnames)
-        print(f"\n✓ Written to {CSV_PATH}")
+        cleaned_rows.sort(key=lambda r: (r["date"], r["time"], r["route_code"]))
+        write_data(CSV_PATH, cleaned_rows, fieldnames)
+        print(f"\n✓ Written {len(cleaned_rows):,} rows to {CSV_PATH}")
     else:
         print(f"\nDry run — no changes written. Use --apply to save.")
 
