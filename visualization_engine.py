@@ -1517,3 +1517,2093 @@ class VisualizationEngine:
 
 
 
+
+    # ========================================================================
+    # CDF and Ranking Evolution Visualizations
+    # ========================================================================
+
+    def plot_cdf_comparison(self) -> None:
+        """
+        Generate cumulative distribution function (CDF) comparison for travel time reliability.
+
+        Creates CDF plots comparing the distribution of travel times (or speeds) across routes.
+        The CDF shows the probability that a route's speed is less than or equal to a given value.
+
+        Key insights from CDF:
+        - Steeper curves indicate more consistent performance (less variability)
+        - Curves shifted to the right indicate faster routes
+        - The median (50th percentile) shows typical performance
+        - The spread shows reliability (narrow = reliable, wide = variable)
+
+        Uses route-specific colors from the color palette for consistency.
+
+        Examples
+        --------
+        >>> viz.plot_cdf_comparison()
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 7))
+
+        # Plot CDF for each route
+        for route_code in self.routes:
+            route_data = df[df['route_code'] == route_code]
+
+            if route_data.empty:
+                continue
+
+            # Get speeds and sort
+            speeds = route_data['avg_speed'].dropna().sort_values()
+
+            if len(speeds) == 0:
+                continue
+
+            # Compute CDF (empirical cumulative distribution)
+            cdf = np.arange(1, len(speeds) + 1) / len(speeds)
+
+            # Get route color and label
+            route_color = self._get_route_color(route_code)
+            route_label = self._get_route_label(route_code)
+
+            # Plot CDF
+            ax.plot(speeds, cdf, color=route_color, linewidth=2.5,
+                   label=route_label, alpha=0.85)
+
+            # Add markers at key percentiles (25th, 50th, 75th)
+            percentiles = [0.25, 0.50, 0.75]
+            for p in percentiles:
+                idx = int(p * len(speeds))
+                if idx < len(speeds):
+                    ax.plot(speeds.iloc[idx], p, 'o', color=route_color,
+                           markersize=6, markeredgecolor='white', markeredgewidth=1.5)
+
+        # Format plot
+        ax.set_xlabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Cumulative Probability', fontsize=12, fontweight='bold')
+        ax.set_title('Cumulative Distribution Function (CDF) Comparison\n'
+                    'Travel Time Reliability Analysis',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Set y-axis to percentage
+        ax.set_ylim(0, 1)
+        ax.set_yticks(np.arange(0, 1.1, 0.1))
+        ax.set_yticklabels([f'{int(y*100)}%' for y in np.arange(0, 1.1, 0.1)])
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Add reference lines for key percentiles
+        for p, label in [(0.25, '25th'), (0.50, '50th (Median)'), (0.75, '75th')]:
+            ax.axhline(y=p, color='gray', linestyle=':', linewidth=1, alpha=0.5)
+            ax.text(ax.get_xlim()[0], p, f'  {label}', va='center',
+                   fontsize=9, color='gray', style='italic')
+
+        # Add legend
+        ax.legend(loc='lower right', framealpha=0.95, fontsize=10)
+
+        # Add interpretation note
+        fig.text(0.5, 0.01,
+                'Interpretation: Steeper curves = more consistent performance. '
+                'Curves to the right = faster routes. '
+                'Markers show 25th, 50th (median), and 75th percentiles.',
+                ha='center', fontsize=10, style='italic', color='gray', wrap=True)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 1])
+        plt.show()
+
+    def plot_ranking_evolution(self, days_rolling: int = 10) -> None:
+        """
+        Show how route rankings change over time using a rolling window.
+
+        Creates a line plot showing each route's ranking position over time.
+        Rankings are computed using a rolling window (default 10 days) to smooth
+        out daily fluctuations and reveal longer-term trends.
+
+        Key insights:
+        - Stable routes maintain consistent ranking positions
+        - Volatile routes show frequent ranking changes
+        - Crossing lines indicate shifts in relative performance
+        - Trends reveal improving or declining route performance
+
+        Parameters
+        ----------
+        days_rolling : int, default=10
+            Number of days in the rolling window for ranking calculation
+
+        Examples
+        --------
+        >>> viz.plot_ranking_evolution(days_rolling=14)
+        """
+        from traffic_analyzer import TrafficAnalyzer
+
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Get date range
+        dates = pd.date_range(
+            start=df['timestamp'].min(),
+            end=df['timestamp'].max(),
+            freq='D'
+        )
+
+        # Initialize analyzer
+        analyzer = TrafficAnalyzer(self.df, self.routes_df)
+
+        # Compute rankings for each date
+        rankings_over_time = []
+
+        for date in dates:
+            try:
+                # Calculate R³S² scores for this date
+                scores = analyzer.calculate_rrs(ref_date=date, days_rolling=days_rolling)
+
+                # Add date and ranking
+                scores['date'] = date
+                scores['rank'] = range(1, len(scores) + 1)
+
+                rankings_over_time.append(scores[['date', 'route_code', 'rank', 'points']])
+            except Exception as e:
+                # Skip dates with insufficient data
+                continue
+
+        if not rankings_over_time:
+            print("Insufficient data to compute ranking evolution.")
+            return
+
+        # Combine all rankings
+        rankings_df = pd.concat(rankings_over_time, ignore_index=True)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 8))
+
+        # Plot ranking evolution for each route
+        for route_code in self.routes:
+            route_rankings = rankings_df[rankings_df['route_code'] == route_code]
+
+            if route_rankings.empty:
+                continue
+
+            # Get route color and label
+            route_color = self._get_route_color(route_code)
+            route_label = self._get_route_label(route_code)
+
+            # Plot ranking over time
+            ax.plot(route_rankings['date'], route_rankings['rank'],
+                   color=route_color, linewidth=2, label=route_label,
+                   marker='o', markersize=3, alpha=0.8)
+
+        # Format plot
+        ax.set_xlabel('Date', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Ranking Position', fontsize=12, fontweight='bold')
+        ax.set_title(f'Route Ranking Evolution Over Time\n'
+                    f'({days_rolling}-day rolling window)',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Invert y-axis so rank 1 is at the top
+        ax.invert_yaxis()
+
+        # Set y-axis ticks to integer ranks
+        n_routes = len(self.routes)
+        ax.set_yticks(range(1, n_routes + 1))
+        ax.set_yticklabels([f'#{i}' for i in range(1, n_routes + 1)])
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Format x-axis dates
+        import matplotlib.dates as mdates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=10, ncol=2)
+
+        # Add interpretation note
+        fig.text(0.5, 0.01,
+                f'Interpretation: Lower rank numbers (#1) indicate better performance. '
+                f'Stable lines = consistent performance. Crossing lines = changing relative performance.',
+                ha='center', fontsize=10, style='italic', color='gray', wrap=True)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 1])
+        plt.show()
+
+        # Print ranking volatility summary
+        print("\nRanking Volatility Summary:")
+        print("=" * 70)
+        for route_code in self.routes:
+            route_rankings = rankings_df[rankings_df['route_code'] == route_code]
+            if not route_rankings.empty:
+                avg_rank = route_rankings['rank'].mean()
+                std_rank = route_rankings['rank'].std()
+                min_rank = route_rankings['rank'].min()
+                max_rank = route_rankings['rank'].max()
+                rank_range = max_rank - min_rank
+
+                route_label = self._get_route_label(route_code, 'short')
+                print(f"{route_label:25s} | Avg: #{avg_rank:.1f} | "
+                      f"Std: {std_rank:.2f} | Range: #{int(min_rank)}-#{int(max_rank)} ({int(rank_range)})")
+        print("=" * 70)
+
+    # ========================================================================
+    # Anomaly Detection Visualizations
+    # ========================================================================
+
+    def plot_control_chart(self, route_code: str) -> None:
+        """
+        Generate control chart with 2-sigma and 3-sigma bounds for anomaly detection.
+
+        Creates a control chart (also known as Shewhart chart) showing:
+        - Time series of average speeds
+        - Mean line (center line)
+        - ±2 sigma bounds (warning limits)
+        - ±3 sigma bounds (control limits)
+        - Highlighted points exceeding 3 standard deviations
+
+        Control charts help identify:
+        - Unusual observations (outliers)
+        - Systematic shifts in performance
+        - Increasing/decreasing variability
+        - Process stability over time
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+
+        Examples
+        --------
+        >>> viz.plot_control_chart('VJRQ+2M|RMJJ+F4')
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Sort by timestamp
+        route_data = route_data.sort_values('timestamp')
+
+        # Compute statistics
+        mean_speed = route_data['avg_speed'].mean()
+        std_speed = route_data['avg_speed'].std()
+
+        # Compute control limits
+        ucl_3sigma = mean_speed + 3 * std_speed  # Upper control limit
+        lcl_3sigma = mean_speed - 3 * std_speed  # Lower control limit
+        uwl_2sigma = mean_speed + 2 * std_speed  # Upper warning limit
+        lwl_2sigma = mean_speed - 2 * std_speed  # Lower warning limit
+
+        # Identify anomalies (beyond 3 sigma)
+        anomalies = route_data[
+            (route_data['avg_speed'] > ucl_3sigma) |
+            (route_data['avg_speed'] < lcl_3sigma)
+        ]
+
+        # Get route color and label
+        route_color = self._get_route_color(route_code)
+        route_label = self._get_route_label(route_code)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot time series
+        ax.plot(route_data['timestamp'], route_data['avg_speed'],
+               color=route_color, linewidth=1, alpha=0.6, label='Observed Speed')
+
+        # Plot mean line
+        ax.axhline(y=mean_speed, color='green', linestyle='-', linewidth=2,
+                  label=f'Mean ({mean_speed:.1f} km/h)', alpha=0.8)
+
+        # Plot 2-sigma bounds (warning limits)
+        ax.axhline(y=uwl_2sigma, color='orange', linestyle='--', linewidth=1.5,
+                  label='±2σ (Warning Limits)', alpha=0.7)
+        ax.axhline(y=lwl_2sigma, color='orange', linestyle='--', linewidth=1.5, alpha=0.7)
+
+        # Plot 3-sigma bounds (control limits)
+        ax.axhline(y=ucl_3sigma, color='red', linestyle='--', linewidth=2,
+                  label='±3σ (Control Limits)', alpha=0.8)
+        ax.axhline(y=lcl_3sigma, color='red', linestyle='--', linewidth=2, alpha=0.8)
+
+        # Highlight anomalies
+        if not anomalies.empty:
+            ax.scatter(anomalies['timestamp'], anomalies['avg_speed'],
+                      color='red', s=100, marker='o', edgecolors='darkred',
+                      linewidths=2, zorder=5, label=f'Anomalies (n={len(anomalies)})')
+
+        # Format plot
+        ax.set_xlabel('Date', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Control Chart: {route_label}\n'
+                    f'Anomaly Detection with Statistical Process Control',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Format x-axis dates
+        import matplotlib.dates as mdates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=10)
+
+        # Add statistics box
+        stats_text = (
+            f'Statistics:\n'
+            f'Mean: {mean_speed:.2f} km/h\n'
+            f'Std Dev: {std_speed:.2f} km/h\n'
+            f'Anomalies: {len(anomalies)} ({len(anomalies)/len(route_data)*100:.1f}%)'
+        )
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+               fontsize=10, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray'))
+
+        plt.tight_layout()
+        plt.show()
+
+
+    def plot_deviation_timeline(self, route_code: str) -> None:
+        """
+        Generate deviation timeline with shaded regions for unusual periods.
+
+        Creates a timeline showing:
+        - Deviation from expected speed over time
+        - Shaded regions for periods exceeding 2σ and 3σ thresholds
+        - Contextual anomaly detection based on hour-of-day and day-of-week
+        - Moving average trend line
+
+        This visualization helps identify:
+        - Temporal patterns in anomalous behavior
+        - Sustained periods of unusual performance
+        - Whether deviations are getting better or worse over time
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+
+        Examples
+        --------
+        >>> viz.plot_deviation_timeline('VJRQ+2M|RMJJ+F4')
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Sort by timestamp
+        route_data = route_data.sort_values('timestamp')
+
+        # Compute expected speed based on hour-of-day and day-of-week patterns
+        expected_speeds = route_data.groupby(
+            ['hour', 'day_of_week']
+        )['avg_speed'].transform('mean')
+
+        route_data['expected_speed'] = expected_speeds
+        route_data['deviation'] = route_data['avg_speed'] - route_data['expected_speed']
+
+        # Compute deviation statistics
+        mean_deviation = route_data['deviation'].mean()
+        std_deviation = route_data['deviation'].std()
+
+        # Compute moving average (7-day window)
+        route_data['deviation_ma'] = route_data['deviation'].rolling(
+            window=min(168, len(route_data)),  # 7 days * 24 hours, or less if insufficient data
+            center=True,
+            min_periods=1
+        ).mean()
+
+        # Get route color and label
+        route_color = self._get_route_color(route_code)
+        route_label = self._get_route_label(route_code)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot deviation timeline
+        ax.plot(route_data['timestamp'], route_data['deviation'],
+               color=route_color, linewidth=1, alpha=0.4, label='Deviation')
+
+        # Plot moving average
+        ax.plot(route_data['timestamp'], route_data['deviation_ma'],
+               color='darkblue', linewidth=2.5, alpha=0.8, label='7-Day Moving Average')
+
+        # Plot mean line
+        ax.axhline(y=mean_deviation, color='green', linestyle='-', linewidth=2,
+                  label=f'Mean Deviation ({mean_deviation:.1f} km/h)', alpha=0.8)
+
+        # Add shaded regions for 2σ and 3σ thresholds
+        # Positive deviations (faster than expected)
+        ax.axhspan(mean_deviation + 2*std_deviation, mean_deviation + 3*std_deviation,
+                  alpha=0.15, color='orange', label='±2σ Warning Zone')
+        ax.axhspan(mean_deviation + 3*std_deviation, ax.get_ylim()[1],
+                  alpha=0.2, color='red', label='±3σ Anomaly Zone')
+
+        # Negative deviations (slower than expected)
+        ax.axhspan(mean_deviation - 3*std_deviation, mean_deviation - 2*std_deviation,
+                  alpha=0.15, color='orange')
+        ax.axhspan(ax.get_ylim()[0], mean_deviation - 3*std_deviation,
+                  alpha=0.2, color='red')
+
+        # Highlight anomalous periods (beyond 3σ)
+        anomalies = route_data[abs(route_data['deviation']) > 3*std_deviation]
+        if not anomalies.empty:
+            ax.scatter(anomalies['timestamp'], anomalies['deviation'],
+                      color='red', s=80, marker='o', edgecolors='darkred',
+                      linewidths=2, zorder=5, label=f'Anomalies (n={len(anomalies)})')
+
+        # Format plot
+        ax.set_xlabel('Date', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Deviation from Expected Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Deviation Timeline: {route_label}\n'
+                    f'Contextual Anomaly Detection with Temporal Patterns',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Format x-axis dates
+        import matplotlib.dates as mdates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=9, ncol=2)
+
+        # Count anomalies
+        anomaly_pct = len(anomalies) / len(route_data) * 100
+
+        # Add statistics box
+        stats_text = (
+            f'Statistics:\n'
+            f'Mean Deviation: {mean_deviation:.2f} km/h\n'
+            f'Std Deviation: {std_deviation:.2f} km/h\n'
+            f'Anomalies: {len(anomalies)} ({anomaly_pct:.1f}%)\n'
+            f'Max Positive: +{route_data["deviation"].max():.1f} km/h\n'
+            f'Max Negative: {route_data["deviation"].min():.1f} km/h'
+        )
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+               fontsize=10, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray'))
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_anomaly_scatter(self, route_code: Optional[str] = None) -> None:
+        """
+        Generate anomaly scatter plot highlighting deviations from expected patterns.
+
+        Creates a scatter plot showing:
+        - Expected speed (based on hour-of-day and day-of-week patterns)
+        - Actual observed speed
+        - Deviations colored by magnitude
+        - Contextual anomaly detection (considers time-of-day patterns)
+
+        This visualization helps identify:
+        - When actual speeds deviate significantly from expected patterns
+        - Whether deviations are positive (faster) or negative (slower)
+        - Patterns in anomalous behavior
+
+        Parameters
+        ----------
+        route_code : str, optional
+            Route identifier. If None, shows all routes.
+
+        Examples
+        --------
+        >>> viz.plot_anomaly_scatter('VJRQ+2M|RMJJ+F4')
+        >>> viz.plot_anomaly_scatter()  # All routes
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data if route specified
+        if route_code:
+            plot_data = df[df['route_code'] == route_code].copy()
+            if plot_data.empty:
+                print(f"No data available for route: {self._get_route_label(route_code)}")
+                return
+            title_suffix = self._get_route_label(route_code)
+        else:
+            plot_data = df.copy()
+            title_suffix = "All Routes"
+
+        # Compute expected speed based on hour-of-day and day-of-week patterns
+        # Group by route, hour, and day_of_week to get expected patterns
+        expected_speeds = plot_data.groupby(
+            ['route_code', 'hour', 'day_of_week']
+        )['avg_speed'].transform('mean')
+
+        plot_data['expected_speed'] = expected_speeds
+        plot_data['deviation'] = plot_data['avg_speed'] - plot_data['expected_speed']
+
+        # Compute deviation magnitude (in standard deviations)
+        std_dev = plot_data.groupby(['route_code', 'hour', 'day_of_week'])['avg_speed'].transform('std')
+        plot_data['deviation_sigma'] = plot_data['deviation'] / std_dev.replace(0, 1)  # Avoid division by zero
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        # Create color map based on deviation magnitude
+        # Use diverging colormap: blue (slower than expected), white (as expected), red (faster than expected)
+        scatter = ax.scatter(
+            plot_data['expected_speed'],
+            plot_data['avg_speed'],
+            c=plot_data['deviation_sigma'],
+            cmap='RdBu_r',  # Red for positive deviations, Blue for negative
+            s=30,
+            alpha=0.6,
+            edgecolors='none',
+            vmin=-3,
+            vmax=3
+        )
+
+        # Add diagonal line (y=x) representing perfect match
+        min_speed = min(plot_data['expected_speed'].min(), plot_data['avg_speed'].min())
+        max_speed = max(plot_data['expected_speed'].max(), plot_data['avg_speed'].max())
+        ax.plot([min_speed, max_speed], [min_speed, max_speed],
+               'k--', linewidth=2, alpha=0.5, label='Expected = Actual')
+
+        # Add colorbar
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Deviation (σ)', fontsize=11, fontweight='bold')
+        cbar.ax.axhline(y=2, color='orange', linestyle='--', linewidth=1.5, alpha=0.7)
+        cbar.ax.axhline(y=-2, color='orange', linestyle='--', linewidth=1.5, alpha=0.7)
+        cbar.ax.axhline(y=3, color='red', linestyle='--', linewidth=2, alpha=0.8)
+        cbar.ax.axhline(y=-3, color='red', linestyle='--', linewidth=2, alpha=0.8)
+
+        # Format plot
+        ax.set_xlabel('Expected Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Actual Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Anomaly Scatter Plot: {title_suffix}\n'
+                    f'Contextual Anomaly Detection (Hour-of-Day & Day-of-Week)',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=10)
+
+        # Count anomalies (beyond 3 sigma)
+        anomalies = plot_data[abs(plot_data['deviation_sigma']) > 3]
+        anomaly_pct = len(anomalies) / len(plot_data) * 100
+
+        # Add statistics box
+        stats_text = (
+            f'Statistics:\n'
+            f'Total Observations: {len(plot_data):,}\n'
+            f'Anomalies (>3σ): {len(anomalies):,} ({anomaly_pct:.1f}%)\n'
+            f'Mean Deviation: {plot_data["deviation"].mean():.2f} km/h\n'
+            f'Std Deviation: {plot_data["deviation"].std():.2f} km/h'
+        )
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+               fontsize=10, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray'))
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+    def plot_residual_analysis(self, route_code: str) -> None:
+        """
+        Generate residual analysis plot using seasonal decomposition.
+
+        Creates diagnostic plots for residuals from seasonal decomposition:
+        1. Residual time series
+        2. Residual histogram with normal distribution overlay
+        3. Q-Q plot for normality assessment
+        4. Residual autocorrelation
+
+        These plots help assess:
+        - Whether residuals are random (white noise)
+        - Whether residuals are normally distributed
+        - Whether there are remaining patterns in residuals
+        - Model adequacy
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+
+        Examples
+        --------
+        >>> viz.plot_residual_analysis('VJRQ+2M|RMJJ+F4')
+        """
+        from statsmodels.tsa.seasonal import seasonal_decompose
+        from scipy import stats
+
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Sort by timestamp and set as index
+        route_data = route_data.sort_values('timestamp')
+        route_data = route_data.set_index('timestamp')
+
+        # Check for sufficient data
+        min_required_hours = 2 * 24 * 7  # 2 weeks
+        if len(route_data) < min_required_hours:
+            print(f"Insufficient data for decomposition. Need at least {min_required_hours} hours.")
+            return
+
+        # Resample to hourly frequency
+        route_data_hourly = route_data['avg_speed'].resample('h').mean()
+        route_data_hourly = route_data_hourly.ffill(limit=3).bfill(limit=3).dropna()
+
+        if len(route_data_hourly) < min_required_hours:
+            print(f"Insufficient data after resampling.")
+            return
+
+        try:
+            # Perform seasonal decomposition
+            decomposition = seasonal_decompose(
+                route_data_hourly,
+                model='additive',
+                period=24 * 7,
+                extrapolate_trend='freq'
+            )
+
+            residuals = decomposition.resid.dropna()
+
+            # Get route color and label
+            route_color = self._get_route_color(route_code)
+            route_label = self._get_route_label(route_code)
+
+            # Create figure with 4 subplots
+            fig = plt.figure(figsize=(14, 10))
+            gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+            # Subplot 1: Residual time series
+            ax1 = fig.add_subplot(gs[0, :])
+            ax1.plot(residuals.index, residuals.values, color=route_color,
+                    linewidth=1, alpha=0.7)
+            ax1.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+            ax1.set_xlabel('Date', fontsize=11, fontweight='bold')
+            ax1.set_ylabel('Residual (km/h)', fontsize=11, fontweight='bold')
+            ax1.set_title('Residual Time Series', fontsize=12, fontweight='bold')
+            ax1.grid(True, alpha=0.3)
+
+            # Format x-axis
+            import matplotlib.dates as mdates
+            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+            plt.setp(ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+            # Subplot 2: Histogram with normal distribution overlay
+            ax2 = fig.add_subplot(gs[1, 0])
+            ax2.hist(residuals, bins=30, density=True, alpha=0.7,
+                    color=route_color, edgecolor='black')
+
+            # Overlay normal distribution
+            mu, sigma = residuals.mean(), residuals.std()
+            x = np.linspace(residuals.min(), residuals.max(), 100)
+            ax2.plot(x, stats.norm.pdf(x, mu, sigma), 'r-', linewidth=2,
+                    label=f'Normal(μ={mu:.2f}, σ={sigma:.2f})')
+
+            ax2.set_xlabel('Residual (km/h)', fontsize=11, fontweight='bold')
+            ax2.set_ylabel('Density', fontsize=11, fontweight='bold')
+            ax2.set_title('Residual Distribution', fontsize=12, fontweight='bold')
+            ax2.legend(fontsize=9)
+            ax2.grid(True, alpha=0.3)
+
+            # Subplot 3: Q-Q plot
+            ax3 = fig.add_subplot(gs[1, 1])
+            stats.probplot(residuals, dist="norm", plot=ax3)
+            ax3.get_lines()[0].set_color(route_color)
+            ax3.get_lines()[0].set_markersize(4)
+            ax3.get_lines()[1].set_color('red')
+            ax3.get_lines()[1].set_linewidth(2)
+            ax3.set_title('Q-Q Plot (Normality Check)', fontsize=12, fontweight='bold')
+            ax3.grid(True, alpha=0.3)
+
+            # Add overall title
+            fig.suptitle(f'Residual Analysis: {route_label}',
+                        fontsize=14, fontweight='bold', y=0.995)
+
+            # Add statistics box
+            # Perform normality test
+            shapiro_stat, shapiro_p = stats.shapiro(residuals[:5000] if len(residuals) > 5000 else residuals)
+
+            stats_text = (
+                f'Residual Statistics:\n'
+                f'Mean: {mu:.4f} km/h\n'
+                f'Std Dev: {sigma:.4f} km/h\n'
+                f'Shapiro-Wilk p-value: {shapiro_p:.4f}\n'
+                f'{"Normally distributed" if shapiro_p > 0.05 else "Not normally distributed"}'
+            )
+            fig.text(0.02, 0.02, stats_text, fontsize=10,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.9, edgecolor='gray'))
+
+            plt.tight_layout(rect=[0, 0.05, 1, 0.99])
+            plt.show()
+
+        except Exception as e:
+            print(f"Error performing residual analysis: {e}")
+            return
+
+    # ========================================================================
+    # Predictive Insight Visualizations
+    # ========================================================================
+
+    def plot_forecast(self, route_code: str, forecast_hours: int = 24) -> None:
+        """
+        Generate forecast visualization showing predicted speeds for next N hours.
+
+        Creates a forecast plot using historical hour-of-day and day-of-week patterns
+        to predict future speeds. Includes confidence interval bands based on
+        historical variability.
+
+        The forecast uses a simple but effective approach:
+        - For each future hour, compute the average speed for that hour/day-of-week
+        - Confidence intervals based on historical standard deviation
+        - Assumes patterns repeat (no trend modeling)
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+        forecast_hours : int, default=24
+            Number of hours to forecast into the future
+
+        Examples
+        --------
+        >>> viz.plot_forecast('VJRQ+2M|RMJJ+F4', forecast_hours=24)
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Get the last timestamp in the data
+        last_timestamp = route_data['timestamp'].max()
+
+        # Compute historical averages by hour and day-of-week
+        historical_stats = route_data.groupby(['hour', 'day_of_week'])['avg_speed'].agg([
+            ('mean', 'mean'),
+            ('std', 'std'),
+            ('count', 'count')
+        ]).reset_index()
+
+        # Generate forecast timestamps
+        forecast_timestamps = pd.date_range(
+            start=last_timestamp + pd.Timedelta(hours=1),
+            periods=forecast_hours,
+            freq='h'
+        )
+
+        # Create forecast DataFrame
+        forecast_data = []
+        for ts in forecast_timestamps:
+            hour = ts.hour
+            day_of_week = ts.day_name()
+
+            # Look up historical average for this hour/day
+            hist = historical_stats[
+                (historical_stats['hour'] == hour) &
+                (historical_stats['day_of_week'] == day_of_week)
+            ]
+
+            if not hist.empty:
+                mean_speed = hist['mean'].iloc[0]
+                std_speed = hist['std'].iloc[0]
+                count = hist['count'].iloc[0]
+
+                # Compute confidence interval (95% = 1.96 * std)
+                # Adjust for sample size using standard error
+                se = std_speed / np.sqrt(count) if count > 0 else std_speed
+                ci_lower = mean_speed - 1.96 * se
+                ci_upper = mean_speed + 1.96 * se
+            else:
+                # No historical data for this hour/day combination
+                mean_speed = route_data['avg_speed'].mean()
+                std_speed = route_data['avg_speed'].std()
+                ci_lower = mean_speed - 1.96 * std_speed
+                ci_upper = mean_speed + 1.96 * std_speed
+
+            forecast_data.append({
+                'timestamp': ts,
+                'forecast': mean_speed,
+                'ci_lower': ci_lower,
+                'ci_upper': ci_upper
+            })
+
+        forecast_df = pd.DataFrame(forecast_data)
+
+        # Get recent historical data for context (last 48 hours)
+        recent_cutoff = last_timestamp - pd.Timedelta(hours=48)
+        recent_data = route_data[route_data['timestamp'] >= recent_cutoff].copy()
+
+        # Get route color and label
+        route_color = self._get_route_color(route_code)
+        route_label = self._get_route_label(route_code)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot recent historical data
+        ax.plot(recent_data['timestamp'], recent_data['avg_speed'],
+               color=route_color, linewidth=2, alpha=0.8, label='Historical', marker='o', markersize=4)
+
+        # Plot forecast
+        ax.plot(forecast_df['timestamp'], forecast_df['forecast'],
+               color='red', linewidth=2, linestyle='--', alpha=0.8, label='Forecast', marker='s', markersize=4)
+
+        # Plot confidence interval
+        ax.fill_between(forecast_df['timestamp'],
+                       forecast_df['ci_lower'],
+                       forecast_df['ci_upper'],
+                       color='red', alpha=0.2, label='95% Confidence Interval')
+
+        # Add vertical line at forecast start
+        ax.axvline(x=last_timestamp, color='gray', linestyle=':', linewidth=2, alpha=0.7)
+        ax.text(last_timestamp, ax.get_ylim()[1], '  Forecast Start',
+               rotation=90, va='top', ha='right', fontsize=10, color='gray')
+
+        # Format plot
+        ax.set_xlabel('Date/Time', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Speed Forecast: {route_label}\n'
+                    f'Next {forecast_hours} Hours (Based on Historical Patterns)',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Format x-axis
+        import matplotlib.dates as mdates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=10)
+
+        # Add note
+        fig.text(0.5, 0.01,
+                'Note: Forecast based on historical hour-of-day and day-of-week patterns. '
+                'Confidence intervals reflect historical variability.',
+                ha='center', fontsize=10, style='italic', color='gray', wrap=True)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 1])
+        plt.show()
+
+    def plot_typical_day_profile(self, day_of_week: Optional[str] = None) -> None:
+        """
+        Generate typical day profile for each day-of-week with variance bands.
+
+        Creates line plots showing the typical speed profile for each day of the week,
+        with shaded regions showing variability (±1 standard deviation).
+
+        If day_of_week is specified, shows only that day. Otherwise, shows all days
+        in a grid layout.
+
+        Parameters
+        ----------
+        day_of_week : str, optional
+            Specific day to plot ('Monday', 'Tuesday', etc.). If None, plots all days.
+
+        Examples
+        --------
+        >>> viz.plot_typical_day_profile('Monday')
+        >>> viz.plot_typical_day_profile()  # All days
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Determine which days to plot
+        if day_of_week:
+            days_to_plot = [day_of_week]
+        else:
+            days_to_plot = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        # Create subplots
+        n_days = len(days_to_plot)
+        if n_days == 1:
+            fig, axes = plt.subplots(1, 1, figsize=(12, 6))
+            axes = [axes]
+        else:
+            n_cols = 2
+            n_rows = (n_days + n_cols - 1) // n_cols
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows))
+            axes = axes.flatten() if n_days > 1 else [axes]
+
+        for idx, day in enumerate(days_to_plot):
+            ax = axes[idx]
+
+            # Filter data for this day
+            day_data = df[df['day_of_week'] == day]
+
+            if day_data.empty:
+                ax.text(0.5, 0.5, f'No data for {day}',
+                       ha='center', va='center', transform=ax.transAxes)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+
+            # Plot each route
+            for route_code in self.routes:
+                route_day_data = day_data[day_data['route_code'] == route_code]
+
+                if route_day_data.empty:
+                    continue
+
+                # Compute hourly statistics
+                hourly_stats = route_day_data.groupby('hour')['avg_speed'].agg([
+                    ('mean', 'mean'),
+                    ('std', 'std')
+                ]).reset_index()
+
+                # Ensure all hours are present
+                hourly_stats = hourly_stats.set_index('hour').reindex(range(24)).reset_index()
+
+                # Get route color and label
+                route_color = self._get_route_color(route_code)
+                route_label = self._get_route_label(route_code, 'short')
+
+                # Plot mean line
+                ax.plot(hourly_stats['hour'], hourly_stats['mean'],
+                       color=route_color, linewidth=2, label=route_label, alpha=0.9)
+
+                # Add variance band
+                valid_mask = hourly_stats['mean'].notna()
+                if valid_mask.any():
+                    hours = hourly_stats.loc[valid_mask, 'hour']
+                    means = hourly_stats.loc[valid_mask, 'mean']
+                    stds = hourly_stats.loc[valid_mask, 'std'].fillna(0)
+
+                    ax.fill_between(hours, means - stds, means + stds,
+                                   color=route_color, alpha=0.15, linewidth=0)
+
+            # Format subplot
+            ax.set_xlabel('Hour of Day', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Avg Speed (km/h)', fontsize=11, fontweight='bold')
+            ax.set_title(f'{day}', fontsize=12, fontweight='bold')
+            ax.set_xticks(range(0, 24, 3))
+            ax.set_xticklabels([self._format_hour_label(h) for h in range(0, 24, 3)],
+                              rotation=45, ha='right')
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+            ax.legend(loc='best', framealpha=0.9, fontsize=8)
+
+        # Hide extra subplots
+        for idx in range(n_days, len(axes)):
+            axes[idx].set_visible(False)
+
+        # Add overall title
+        title = f'Typical Day Profile: {day_of_week}' if day_of_week else 'Typical Day Profiles: All Days'
+        fig.suptitle(title + '\n(Shaded regions show ±1 standard deviation)',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        plt.show()
+
+    def plot_current_vs_predicted(self, route_code: str, reference_date: Optional[str] = None) -> None:
+        """
+        Identify and visualize deviations from expected performance.
+
+        Compares actual speeds on a specific date against the typical pattern
+        for that day-of-week, highlighting periods where performance deviates
+        significantly from expectations.
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+        reference_date : str, optional
+            Date to analyze (format: 'YYYY-MM-DD'). If None, uses most recent date.
+
+        Examples
+        --------
+        >>> viz.plot_current_vs_predicted('VJRQ+2M|RMJJ+F4', '2025-09-15')
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Determine reference date
+        if reference_date:
+            ref_date = pd.to_datetime(reference_date).date()
+        else:
+            ref_date = route_data['timestamp'].max().date()
+
+        # Get data for reference date
+        current_data = route_data[route_data['timestamp'].dt.date == ref_date].copy()
+
+        if current_data.empty:
+            print(f"No data available for date: {ref_date}")
+            return
+
+        # Get day of week for reference date
+        day_of_week = pd.to_datetime(ref_date).day_name()
+
+        # Compute typical pattern for this day-of-week (excluding reference date)
+        typical_data = route_data[
+            (route_data['day_of_week'] == day_of_week) &
+            (route_data['timestamp'].dt.date != ref_date)
+        ]
+
+        typical_pattern = typical_data.groupby('hour')['avg_speed'].agg([
+            ('mean', 'mean'),
+            ('std', 'std')
+        ]).reset_index()
+
+        # Merge current with typical
+        current_data = current_data.merge(
+            typical_pattern,
+            on='hour',
+            how='left',
+            suffixes=('', '_typical')
+        )
+
+        current_data['deviation'] = current_data['avg_speed'] - current_data['mean']
+        current_data['is_anomaly'] = current_data['deviation'].abs() > 2 * current_data['std']
+
+        # Get route color and label
+        route_color = self._get_route_color(route_code)
+        route_label = self._get_route_label(route_code)
+
+        # Create figure
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+
+        # Subplot 1: Current vs Typical
+        ax1.plot(current_data['hour'], current_data['avg_speed'],
+                color=route_color, linewidth=2.5, marker='o', markersize=6,
+                label=f'Actual ({ref_date})', alpha=0.9)
+        ax1.plot(typical_pattern['hour'], typical_pattern['mean'],
+                color='gray', linewidth=2, linestyle='--', marker='s', markersize=5,
+                label=f'Typical {day_of_week}', alpha=0.7)
+
+        # Add typical variance band
+        ax1.fill_between(typical_pattern['hour'],
+                        typical_pattern['mean'] - typical_pattern['std'],
+                        typical_pattern['mean'] + typical_pattern['std'],
+                        color='gray', alpha=0.2, label='±1σ Range')
+
+        # Highlight anomalies
+        anomalies = current_data[current_data['is_anomaly']]
+        if not anomalies.empty:
+            ax1.scatter(anomalies['hour'], anomalies['avg_speed'],
+                       color='red', s=150, marker='X', edgecolors='darkred',
+                       linewidths=2, zorder=5, label=f'Anomalies (n={len(anomalies)})')
+
+        ax1.set_ylabel('Speed (km/h)', fontsize=11, fontweight='bold')
+        ax1.set_title(f'Current vs Predicted: {route_label}',
+                     fontsize=14, fontweight='bold', pad=15)
+        ax1.legend(loc='best', framealpha=0.95, fontsize=10)
+        ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+        # Subplot 2: Deviation
+        colors = ['red' if x > 0 else 'blue' for x in current_data['deviation']]
+        ax2.bar(current_data['hour'], current_data['deviation'],
+               color=colors, alpha=0.6, edgecolor='black', linewidth=0.5)
+        ax2.axhline(y=0, color='black', linestyle='-', linewidth=1)
+
+        # Add threshold lines
+        if not typical_pattern['std'].isna().all():
+            avg_std = typical_pattern['std'].mean()
+            ax2.axhline(y=2*avg_std, color='red', linestyle='--', linewidth=1.5,
+                       alpha=0.7, label='±2σ Threshold')
+            ax2.axhline(y=-2*avg_std, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+
+        ax2.set_xlabel('Hour of Day', fontsize=11, fontweight='bold')
+        ax2.set_ylabel('Deviation (km/h)', fontsize=11, fontweight='bold')
+        ax2.set_xticks(range(0, 24, 2))
+        ax2.set_xticklabels([self._format_hour_label(h) for h in range(0, 24, 2)],
+                           rotation=45, ha='right')
+        ax2.legend(loc='best', framealpha=0.95, fontsize=10)
+        ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+        # Add interpretation note
+        fig.text(0.5, 0.01,
+                f'Interpretation: Red bars = faster than typical. Blue bars = slower than typical. '
+                f'X markers = significant deviations (>2σ).',
+                ha='center', fontsize=10, style='italic', color='gray', wrap=True)
+
+        plt.tight_layout(rect=[0, 0.03, 1, 1])
+        plt.show()
+
+    def plot_seasonal_trends(self, route_code: str) -> None:
+        """
+        Generate month-over-month comparison showing seasonal trends.
+
+        Creates visualizations showing how route performance changes across months,
+        revealing seasonal patterns and long-term trends.
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+
+        Examples
+        --------
+        >>> viz.plot_seasonal_trends('VJRQ+2M|RMJJ+F4')
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Filter data for this route
+        route_data = df[df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {self._get_route_label(route_code)}")
+            return
+
+        # Add month name
+        route_data['month_name'] = route_data['timestamp'].dt.strftime('%Y-%m')
+
+        # Compute monthly statistics
+        monthly_stats = route_data.groupby('month_name')['avg_speed'].agg([
+            ('mean', 'mean'),
+            ('std', 'std'),
+            ('count', 'count')
+        ]).reset_index()
+
+        # Sort by month
+        monthly_stats = monthly_stats.sort_values('month_name')
+
+        # Get route color and label
+        route_color = self._get_route_color(route_code)
+        route_label = self._get_route_label(route_code)
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot monthly averages
+        ax.plot(range(len(monthly_stats)), monthly_stats['mean'],
+               color=route_color, linewidth=2.5, marker='o', markersize=8,
+               label='Monthly Average', alpha=0.9)
+
+        # Add error bars
+        ax.errorbar(range(len(monthly_stats)), monthly_stats['mean'],
+                   yerr=monthly_stats['std'], fmt='none',
+                   ecolor=route_color, alpha=0.3, capsize=5, capthick=2)
+
+        # Format plot
+        ax.set_xlabel('Month', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Seasonal Trends: {route_label}\n'
+                    f'Month-over-Month Performance',
+                    fontsize=14, fontweight='bold', pad=20)
+
+        # Set x-axis labels
+        ax.set_xticks(range(len(monthly_stats)))
+        ax.set_xticklabels(monthly_stats['month_name'], rotation=45, ha='right')
+
+        # Add grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        # Add legend
+        ax.legend(loc='best', framealpha=0.95, fontsize=10)
+
+        # Add sample size annotations
+        for i, row in monthly_stats.iterrows():
+            ax.text(i, row['mean'], f"  n={int(row['count'])}",
+                   fontsize=8, va='bottom', ha='left', color='gray', style='italic')
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_lag_correlations(self) -> None:
+        """
+        Show how one route's performance predicts another's.
+
+        Computes cross-correlations between routes at different time lags,
+        revealing which routes tend to experience similar conditions with
+        a time delay.
+
+        Examples
+        --------
+        >>> viz.plot_lag_correlations()
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Create pivot table: rows = timestamps, columns = routes
+        pivot_data = df.pivot_table(
+            index='timestamp',
+            columns='route_code',
+            values='avg_speed',
+            aggfunc='mean'
+        )
+
+        # Compute cross-correlations at different lags
+        max_lag = 24  # Maximum lag in hours
+        n_routes = len(self.routes)
+
+        # Create figure with subplots for each route pair
+        fig, axes = plt.subplots(n_routes, n_routes, figsize=(16, 16))
+
+        for i, route1 in enumerate(self.routes):
+            for j, route2 in enumerate(self.routes):
+                ax = axes[i, j]
+
+                if route1 not in pivot_data.columns or route2 not in pivot_data.columns:
+                    ax.set_visible(False)
+                    continue
+
+                if i == j:
+                    # Diagonal: show route label
+                    ax.text(0.5, 0.5, self._get_route_label(route1, 'short'),
+                           ha='center', va='center', fontsize=10, fontweight='bold',
+                           transform=ax.transAxes)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    ax.set_frame_on(False)
+                else:
+                    # Compute cross-correlation
+                    series1 = pivot_data[route1].dropna()
+                    series2 = pivot_data[route2].dropna()
+
+                    # Align series
+                    common_idx = series1.index.intersection(series2.index)
+                    series1 = series1.loc[common_idx]
+                    series2 = series2.loc[common_idx]
+
+                    if len(series1) < max_lag:
+                        ax.set_visible(False)
+                        continue
+
+                    # Compute correlations at different lags
+                    lags = range(-max_lag, max_lag + 1)
+                    correlations = []
+
+                    for lag in lags:
+                        if lag == 0:
+                            corr = series1.corr(series2)
+                        elif lag > 0:
+                            corr = series1[:-lag].corr(series2[lag:])
+                        else:
+                            corr = series1[-lag:].corr(series2[:lag])
+                        correlations.append(corr)
+
+                    # Plot
+                    color1 = self._get_route_color(route1)
+                    ax.plot(lags, correlations, color=color1, linewidth=1.5, alpha=0.7)
+                    ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.5)
+                    ax.axvline(x=0, color='black', linestyle='--', linewidth=0.5, alpha=0.5)
+
+                    # Highlight maximum correlation
+                    max_corr_idx = np.argmax(np.abs(correlations))
+                    max_lag = lags[max_corr_idx]
+                    max_corr = correlations[max_corr_idx]
+                    ax.plot(max_lag, max_corr, 'ro', markersize=4)
+
+                    # Format
+                    ax.set_ylim(-1, 1)
+                    if i == n_routes - 1:
+                        ax.set_xlabel('Lag (hours)', fontsize=8)
+                    if j == 0:
+                        ax.set_ylabel('Correlation', fontsize=8)
+                    ax.tick_params(labelsize=7)
+                    ax.grid(True, alpha=0.2)
+
+        fig.suptitle('Cross-Correlation Matrix: Route Lag Analysis\n'
+                    '(Shows how one route predicts another at different time lags)',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        plt.show()
+
+    def plot_best_travel_times(self) -> None:
+        """
+        Show optimal departure times for each route.
+
+        Identifies and visualizes the best times to travel on each route
+        based on historical speed data. Shows:
+        - Best hour of day for each route
+        - Worst hour of day for each route
+        - Speed distribution throughout the day
+
+        Examples
+        --------
+        >>> viz.plot_best_travel_times()
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Compute average speed by route and hour
+        hourly_speeds = df.groupby(['route_code', 'hour'])['avg_speed'].mean().reset_index()
+
+        # Find best and worst hours for each route
+        best_times = []
+        for route_code in self.routes:
+            route_hourly = hourly_speeds[hourly_speeds['route_code'] == route_code]
+
+            if route_hourly.empty:
+                continue
+
+            best_hour = route_hourly.loc[route_hourly['avg_speed'].idxmax(), 'hour']
+            best_speed = route_hourly['avg_speed'].max()
+            worst_hour = route_hourly.loc[route_hourly['avg_speed'].idxmin(), 'hour']
+            worst_speed = route_hourly['avg_speed'].min()
+
+            best_times.append({
+                'route_code': route_code,
+                'route_label': self._get_route_label(route_code, 'short'),
+                'best_hour': int(best_hour),
+                'best_speed': best_speed,
+                'worst_hour': int(worst_hour),
+                'worst_speed': worst_speed,
+                'speed_range': best_speed - worst_speed
+            })
+
+        best_times_df = pd.DataFrame(best_times)
+
+        # Sort by speed range (most variable first)
+        best_times_df = best_times_df.sort_values('speed_range', ascending=False)
+
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+
+        # Subplot 1: Best vs Worst hours
+        x_pos = np.arange(len(best_times_df))
+        width = 0.35
+
+        # Plot best hours
+        colors_best = [self._get_route_color(r) for r in best_times_df['route_code']]
+        ax1.barh(x_pos - width/2, best_times_df['best_speed'],
+                width, label='Best Hour', color=colors_best, alpha=0.8, edgecolor='black')
+
+        # Plot worst hours
+        ax1.barh(x_pos + width/2, best_times_df['worst_speed'],
+                width, label='Worst Hour', color=colors_best, alpha=0.3, edgecolor='black')
+
+        # Add hour labels
+        for i, row in best_times_df.iterrows():
+            idx = best_times_df.index.get_loc(i)
+            ax1.text(row['best_speed'], idx - width/2,
+                    f"  {self._format_hour_label(row['best_hour'])}",
+                    va='center', fontsize=8, fontweight='bold')
+            ax1.text(row['worst_speed'], idx + width/2,
+                    f"  {self._format_hour_label(row['worst_hour'])}",
+                    va='center', fontsize=8, style='italic', color='gray')
+
+        ax1.set_yticks(x_pos)
+        ax1.set_yticklabels(best_times_df['route_label'])
+        ax1.set_xlabel('Average Speed (km/h)', fontsize=11, fontweight='bold')
+        ax1.set_title('Best vs Worst Travel Times by Route',
+                     fontsize=12, fontweight='bold')
+        ax1.legend(loc='best', framealpha=0.95)
+        ax1.grid(True, alpha=0.3, axis='x')
+
+        # Subplot 2: Hourly heatmap showing all routes
+        pivot_hourly = hourly_speeds.pivot(index='route_code', columns='hour', values='avg_speed')
+
+        # Reorder rows to match best_times_df
+        pivot_hourly = pivot_hourly.reindex(best_times_df['route_code'])
+
+        # Create heatmap
+        im = ax2.imshow(pivot_hourly.values, aspect='auto', cmap='RdYlGn', interpolation='nearest')
+
+        # Set ticks
+        ax2.set_yticks(range(len(best_times_df)))
+        ax2.set_yticklabels(best_times_df['route_label'], fontsize=9)
+        ax2.set_xticks(range(0, 24, 2))
+        ax2.set_xticklabels([self._format_hour_label(h) for h in range(0, 24, 2)],
+                           rotation=45, ha='right', fontsize=9)
+
+        ax2.set_xlabel('Hour of Day', fontsize=11, fontweight='bold')
+        ax2.set_title('Speed Heatmap: All Routes by Hour\n(Green = Fast, Red = Slow)',
+                     fontsize=12, fontweight='bold')
+
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax2)
+        cbar.set_label('Avg Speed (km/h)', fontsize=10)
+
+        # Add overall title
+        fig.suptitle('Optimal Travel Times Analysis',
+                    fontsize=14, fontweight='bold', y=0.98)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        plt.show()
+
+        # Print summary table
+        print("\nBest Travel Times Summary:")
+        print("=" * 80)
+        print(f"{'Route':<25} {'Best Time':<15} {'Speed':<12} {'Worst Time':<15} {'Speed':<12}")
+        print("=" * 80)
+        for _, row in best_times_df.iterrows():
+            print(f"{row['route_label']:<25} "
+                  f"{self._format_hour_label(row['best_hour']):<15} "
+                  f"{row['best_speed']:>6.1f} km/h   "
+                  f"{self._format_hour_label(row['worst_hour']):<15} "
+                  f"{row['worst_speed']:>6.1f} km/h")
+        print("=" * 80)
+
+    def create_route_selector(self) -> 'ipywidgets.SelectMultiple':
+        """
+        Create interactive route selector widget using ipywidgets.SelectMultiple.
+
+        Returns a multi-select widget that allows users to select one or more
+        routes for filtering visualizations and analysis.
+
+        Returns
+        -------
+        ipywidgets.SelectMultiple
+            Multi-select widget with all available routes
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> route_selector = viz.create_route_selector()
+        >>> display(route_selector)
+        >>> # Access selected routes
+        >>> selected_routes = route_selector.value
+        """
+        import ipywidgets as widgets
+        
+        # Get route labels for display
+        route_options = []
+        for route_code in self.routes:
+            label = self._get_route_label(route_code)
+            route_options.append((label, route_code))
+        
+        # Sort by label
+        route_options.sort(key=lambda x: x[0])
+        
+        # Create widget
+        selector = widgets.SelectMultiple(
+            options=route_options,
+            value=[self.routes[0]] if self.routes else [],
+            description='Routes:',
+            disabled=False,
+            layout=widgets.Layout(width='400px', height='200px'),
+            style={'description_width': '80px'}
+        )
+        
+        return selector
+
+    def create_time_range_slider(self, start_date: Optional[str] = None, 
+                                 end_date: Optional[str] = None) -> 'ipywidgets.SelectionRangeSlider':
+        """
+        Create interactive time range slider widget using ipywidgets.
+
+        Returns a date range slider that allows users to select a time window
+        for filtering data in visualizations.
+
+        Parameters
+        ----------
+        start_date : str, optional
+            Start date in 'YYYY-MM-DD' format. If None, uses earliest date in data.
+        end_date : str, optional
+            End date in 'YYYY-MM-DD' format. If None, uses latest date in data.
+
+        Returns
+        -------
+        ipywidgets.SelectionRangeSlider
+            Date range slider widget
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> time_slider = viz.create_time_range_slider()
+        >>> display(time_slider)
+        >>> # Access selected range
+        >>> start_idx, end_idx = time_slider.value
+        """
+        import ipywidgets as widgets
+        
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+        
+        # Get date range from data
+        if start_date is None:
+            start_date = df['timestamp'].min().strftime('%Y-%m-%d')
+        if end_date is None:
+            end_date = df['timestamp'].max().strftime('%Y-%m-%d')
+        
+        # Create list of dates
+        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+        date_labels = [d.strftime('%Y-%m-%d') for d in date_range]
+        
+        # Create widget
+        slider = widgets.SelectionRangeSlider(
+            options=date_labels,
+            index=(0, len(date_labels) - 1),
+            description='Date Range:',
+            disabled=False,
+            layout=widgets.Layout(width='600px'),
+            style={'description_width': '100px'}
+        )
+        
+        return slider
+
+    def create_aggregation_toggle(self) -> 'ipywidgets.ToggleButtons':
+        """
+        Create interactive aggregation toggle widget using ipywidgets.ToggleButtons.
+
+        Returns a toggle button widget that allows users to switch between
+        different aggregation levels (hourly, daily, weekly).
+
+        Returns
+        -------
+        ipywidgets.ToggleButtons
+            Toggle buttons for aggregation selection
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> agg_toggle = viz.create_aggregation_toggle()
+        >>> display(agg_toggle)
+        >>> # Access selected aggregation
+        >>> aggregation = agg_toggle.value
+        """
+        import ipywidgets as widgets
+        
+        # Create widget
+        toggle = widgets.ToggleButtons(
+            options=[
+                ('Hourly', 'H'),
+                ('Daily', 'D'),
+                ('Weekly', 'W')
+            ],
+            value='D',
+            description='Aggregation:',
+            disabled=False,
+            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
+            tooltips=[
+                'Aggregate by hour',
+                'Aggregate by day',
+                'Aggregate by week'
+            ],
+            layout=widgets.Layout(width='400px'),
+            style={'description_width': '100px', 'button_width': '100px'}
+        )
+        
+        return toggle
+
+
+    def create_linked_plots(self, route_codes: Optional[List[str]] = None) -> 'plotly.graph_objs.Figure':
+        """
+        Create linked interactive plots where selecting time range highlights data across plots.
+
+        Uses Plotly to create interactive visualizations with:
+        - Hover tooltips showing detailed information
+        - Linked brushing across multiple subplots
+        - Zoom and pan synchronization
+
+        Parameters
+        ----------
+        route_codes : list of str, optional
+            List of route codes to include. If None, includes all routes.
+
+        Returns
+        -------
+        plotly.graph_objs.Figure
+            Interactive figure with linked plots
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> fig = viz.create_linked_plots(['ROUTE_A', 'ROUTE_B'])
+        >>> fig.show()
+        """
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+        
+        # Filter routes if specified
+        if route_codes is None:
+            route_codes = self.routes[:min(5, len(self.routes))]  # Limit to 5 routes for readability
+        
+        # Filter data
+        plot_data = df[df['route_code'].isin(route_codes)].copy()
+        
+        if plot_data.empty:
+            print("No data available for specified routes")
+            return None
+        
+        # Create subplots: time series, distribution, hour-of-day pattern
+        fig = make_subplots(
+            rows=3, cols=1,
+            subplot_titles=(
+                'Speed Over Time (Linked Brushing)',
+                'Speed Distribution',
+                'Average Speed by Hour of Day'
+            ),
+            vertical_spacing=0.12,
+            row_heights=[0.4, 0.3, 0.3]
+        )
+        
+        # Plot 1: Time series with hover tooltips
+        for route_code in route_codes:
+            route_data = plot_data[plot_data['route_code'] == route_code].sort_values('timestamp')
+            route_label = self._get_route_label(route_code)
+            route_color = self.color_palette.get(route_code, '#999999')
+            
+            # Create hover text with detailed information
+            hover_text = []
+            for _, row in route_data.iterrows():
+                text = (
+                    f"<b>{route_label}</b><br>"
+                    f"Time: {row['timestamp'].strftime('%Y-%m-%d %H:%M')}<br>"
+                    f"Speed: {row['avg_speed']:.1f} km/h<br>"
+                    f"Duration: {row['duration']:.1f} min<br>"
+                    f"Distance: {row['distance']:.1f} km"
+                )
+                if 'percentile_rank' in row:
+                    text += f"<br>Percentile: {row['percentile_rank']:.1f}%"
+                hover_text.append(text)
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=route_data['timestamp'],
+                    y=route_data['avg_speed'],
+                    mode='lines+markers',
+                    name=route_label,
+                    line=dict(color=route_color, width=2),
+                    marker=dict(size=4, color=route_color),
+                    hovertext=hover_text,
+                    hoverinfo='text',
+                    legendgroup=route_code
+                ),
+                row=1, col=1
+            )
+        
+        # Plot 2: Distribution (box plot)
+        for route_code in route_codes:
+            route_data = plot_data[plot_data['route_code'] == route_code]
+            route_label = self._get_route_label(route_code)
+            route_color = self.color_palette.get(route_code, '#999999')
+            
+            fig.add_trace(
+                go.Box(
+                    y=route_data['avg_speed'],
+                    name=route_label,
+                    marker_color=route_color,
+                    boxmean='sd',
+                    hoverinfo='y',
+                    legendgroup=route_code,
+                    showlegend=False
+                ),
+                row=2, col=1
+            )
+        
+        # Plot 3: Hour-of-day pattern
+        for route_code in route_codes:
+            route_data = plot_data[plot_data['route_code'] == route_code]
+            route_label = self._get_route_label(route_code)
+            route_color = self.color_palette.get(route_code, '#999999')
+            
+            # Compute hourly averages
+            hourly_avg = route_data.groupby('hour')['avg_speed'].agg(['mean', 'std']).reset_index()
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=hourly_avg['hour'],
+                    y=hourly_avg['mean'],
+                    mode='lines+markers',
+                    name=route_label,
+                    line=dict(color=route_color, width=2),
+                    marker=dict(size=6, color=route_color),
+                    error_y=dict(
+                        type='data',
+                        array=hourly_avg['std'],
+                        visible=True,
+                        color=route_color,
+                        thickness=1.5,
+                        width=3
+                    ),
+                    hovertemplate='<b>%{fullData.name}</b><br>Hour: %{x}<br>Speed: %{y:.1f} km/h<extra></extra>',
+                    legendgroup=route_code,
+                    showlegend=False
+                ),
+                row=3, col=1
+            )
+        
+        # Update layout
+        fig.update_xaxes(title_text="Date", row=1, col=1)
+        fig.update_xaxes(title_text="Route", row=2, col=1)
+        fig.update_xaxes(title_text="Hour of Day", row=3, col=1, dtick=2)
+        
+        fig.update_yaxes(title_text="Speed (km/h)", row=1, col=1)
+        fig.update_yaxes(title_text="Speed (km/h)", row=2, col=1)
+        fig.update_yaxes(title_text="Avg Speed (km/h)", row=3, col=1)
+        
+        fig.update_layout(
+            height=1000,
+            title_text="Interactive Linked Plots - Traffic Analysis",
+            hovermode='closest',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        return fig
+
+    def add_hover_tooltips(self, fig: 'matplotlib.figure.Figure', 
+                          data: pd.DataFrame) -> 'matplotlib.figure.Figure':
+        """
+        Add hover tooltips to matplotlib figure (note: limited interactivity).
+
+        Note: Matplotlib has limited interactive capabilities compared to Plotly.
+        For full interactive tooltips, use create_linked_plots() with Plotly instead.
+
+        This method adds basic annotation support using mplcursors if available.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            Matplotlib figure to enhance
+        data : pd.DataFrame
+            Data associated with the plot
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Enhanced figure with tooltip support
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> fig, ax = plt.subplots()
+        >>> ax.plot(data['x'], data['y'])
+        >>> fig = viz.add_hover_tooltips(fig, data)
+        """
+        try:
+            import mplcursors
+            
+            # Add cursor support to all axes in the figure
+            for ax in fig.get_axes():
+                cursor = mplcursors.cursor(ax, hover=True)
+                
+                @cursor.connect("add")
+                def on_add(sel):
+                    # Customize tooltip appearance
+                    sel.annotation.set_bbox(dict(boxstyle='round,pad=0.5', 
+                                                 facecolor='yellow', 
+                                                 alpha=0.9,
+                                                 edgecolor='black'))
+                    sel.annotation.set_fontsize(9)
+            
+            return fig
+        except ImportError:
+            warnings.warn(
+                "mplcursors not installed. Install with 'pip install mplcursors' "
+                "for tooltip support. For better interactivity, use create_linked_plots() instead."
+            )
+            return fig
+
+
+    def create_summary_table(self, route_codes: Optional[List[str]] = None,
+                            start_date: Optional[str] = None,
+                            end_date: Optional[str] = None,
+                            aggregation: str = 'D') -> pd.DataFrame:
+        """
+        Create dynamic summary statistics table with filter selections.
+
+        Generates a comprehensive summary table that updates based on:
+        - Selected routes
+        - Date range filter
+        - Aggregation level (hourly, daily, weekly)
+
+        Parameters
+        ----------
+        route_codes : list of str, optional
+            List of route codes to include. If None, includes all routes.
+        start_date : str, optional
+            Start date in 'YYYY-MM-DD' format
+        end_date : str, optional
+            End date in 'YYYY-MM-DD' format
+        aggregation : str, default='D'
+            Aggregation level: 'H' (hourly), 'D' (daily), 'W' (weekly)
+
+        Returns
+        -------
+        pd.DataFrame
+            Summary statistics table with columns:
+            - route_code, route_label
+            - observations, avg_speed, std_speed
+            - min_speed, max_speed, median_speed
+            - p25_speed, p75_speed (quartiles)
+            - avg_duration, completeness_pct
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> summary = viz.create_summary_table(
+        ...     route_codes=['ROUTE_A', 'ROUTE_B'],
+        ...     start_date='2024-01-01',
+        ...     end_date='2024-01-31',
+        ...     aggregation='D'
+        ... )
+        >>> print(summary)
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+        
+        # Filter by routes
+        if route_codes is None:
+            route_codes = self.routes
+        filtered_df = df[df['route_code'].isin(route_codes)].copy()
+        
+        # Filter by date range
+        if start_date:
+            filtered_df = filtered_df[filtered_df['timestamp'] >= pd.to_datetime(start_date)]
+        if end_date:
+            filtered_df = filtered_df[filtered_df['timestamp'] <= pd.to_datetime(end_date)]
+        
+        if filtered_df.empty:
+            print("No data available for specified filters")
+            return pd.DataFrame()
+        
+        # Aggregate data if needed
+        if aggregation != 'H':
+            # Resample to specified aggregation level
+            agg_data = []
+            for route_code in route_codes:
+                route_data = filtered_df[filtered_df['route_code'] == route_code].copy()
+                if not route_data.empty:
+                    route_data = route_data.set_index('timestamp')
+                    resampled = route_data.resample(aggregation).agg({
+                        'avg_speed': 'mean',
+                        'duration': 'mean',
+                        'distance': 'mean'
+                    }).reset_index()
+                    resampled['route_code'] = route_code
+                    agg_data.append(resampled)
+            
+            if agg_data:
+                filtered_df = pd.concat(agg_data, ignore_index=True)
+        
+        # Compute summary statistics per route
+        summary_list = []
+        for route_code in route_codes:
+            route_data = filtered_df[filtered_df['route_code'] == route_code]
+            
+            if route_data.empty:
+                continue
+            
+            # Get route label
+            route_label = self._get_route_label(route_code)
+            
+            # Compute statistics
+            summary = {
+                'route_code': route_code,
+                'route_label': route_label,
+                'observations': len(route_data),
+                'avg_speed': route_data['avg_speed'].mean(),
+                'std_speed': route_data['avg_speed'].std(),
+                'min_speed': route_data['avg_speed'].min(),
+                'max_speed': route_data['avg_speed'].max(),
+                'median_speed': route_data['avg_speed'].median(),
+                'p25_speed': route_data['avg_speed'].quantile(0.25),
+                'p75_speed': route_data['avg_speed'].quantile(0.75),
+                'avg_duration': route_data['duration'].mean(),
+                'completeness_pct': (len(route_data) / len(filtered_df)) * 100 if len(filtered_df) > 0 else 0
+            }
+            
+            summary_list.append(summary)
+        
+        # Create DataFrame
+        summary_df = pd.DataFrame(summary_list)
+        
+        # Round numeric columns
+        numeric_cols = ['avg_speed', 'std_speed', 'min_speed', 'max_speed', 
+                       'median_speed', 'p25_speed', 'p75_speed', 'avg_duration', 'completeness_pct']
+        for col in numeric_cols:
+            if col in summary_df.columns:
+                summary_df[col] = summary_df[col].round(2)
+        
+        return summary_df
+
+    def export_report_template(self, output_path: str,
+                              route_codes: Optional[List[str]] = None,
+                              include_visualizations: bool = True) -> str:
+        """
+        Generate downloadable report template capturing visualization states.
+
+        Creates a comprehensive HTML report with:
+        - Summary statistics tables
+        - Embedded visualizations (if requested)
+        - Analysis metadata (date range, filters, etc.)
+        - Exportable format (HTML, can be converted to PDF)
+
+        Parameters
+        ----------
+        output_path : str
+            Path to save the report (e.g., 'report.html')
+        route_codes : list of str, optional
+            List of route codes to include. If None, includes all routes.
+        include_visualizations : bool, default=True
+            Whether to include embedded visualizations in the report
+
+        Returns
+        -------
+        str
+            Path to the generated report file
+
+        Examples
+        --------
+        >>> viz = VisualizationEngine(df, routes_df)
+        >>> report_path = viz.export_report_template(
+        ...     'traffic_report.html',
+        ...     route_codes=['ROUTE_A', 'ROUTE_B'],
+        ...     include_visualizations=True
+        ... )
+        >>> print(f"Report saved to: {report_path}")
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+        
+        # Filter routes
+        if route_codes is None:
+            route_codes = self.routes
+        
+        # Create summary table
+        summary_df = self.create_summary_table(route_codes=route_codes)
+        
+        # Get date range
+        min_date = df['timestamp'].min().strftime('%Y-%m-%d')
+        max_date = df['timestamp'].max().strftime('%Y-%m-%d')
+        
+        # Start building HTML report
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Traffic Analysis Report</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f5f5f5;
+        }}
+        .header {{
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }}
+        .section {{
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 15px;
+        }}
+        th, td {{
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }}
+        th {{
+            background-color: #3498db;
+            color: white;
+        }}
+        tr:nth-child(even) {{
+            background-color: #f2f2f2;
+        }}
+        .metadata {{
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 10px;
+        }}
+        .visualization {{
+            margin-top: 20px;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Traffic Analysis Report</h1>
+        <p>Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Report Metadata</h2>
+        <p><strong>Date Range:</strong> {min_date} to {max_date}</p>
+        <p><strong>Routes Analyzed:</strong> {len(route_codes)}</p>
+        <p><strong>Total Observations:</strong> {len(df):,}</p>
+    </div>
+    
+    <div class="section">
+        <h2>Summary Statistics</h2>
+        {summary_df.to_html(index=False, classes='summary-table')}
+    </div>
+"""
+        
+        # Add visualizations if requested
+        if include_visualizations:
+            html_content += """
+    <div class="section">
+        <h2>Visualizations</h2>
+        <p class="metadata">Note: Interactive visualizations are best viewed in Jupyter notebooks. 
+        This report contains static snapshots.</p>
+        <div class="visualization">
+            <p><em>Visualizations can be generated separately using the VisualizationEngine methods.</em></p>
+        </div>
+    </div>
+"""
+        
+        # Add footer
+        html_content += """
+    <div class="section metadata">
+        <p><strong>Analysis Tool:</strong> Traffic Analysis Enhancement System</p>
+        <p><strong>Report Format:</strong> HTML (can be converted to PDF using browser print function)</p>
+    </div>
+</body>
+</html>
+"""
+        
+        # Write to file
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        print(f"Report successfully exported to: {output_path}")
+        return output_path

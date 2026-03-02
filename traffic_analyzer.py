@@ -1448,3 +1448,499 @@ class TrafficAnalyzer:
             })
         
         return recommendations
+
+    # ========================================================================
+    # Diagnostic Plot Generation Methods
+    # ========================================================================
+
+    def plot_qq_normality(self) -> None:
+        """
+        Generate Q-Q plots for normality assessment of each route's speed distribution.
+
+        Creates a grid of Q-Q (quantile-quantile) plots comparing the distribution
+        of speeds for each route against a theoretical normal distribution.
+
+        Q-Q plots help assess:
+        - Whether speed distributions are approximately normal
+        - Types of deviations from normality (skewness, heavy tails, etc.)
+        - Which routes may benefit from non-parametric methods
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> analyzer.plot_qq_normality()
+        """
+        from scipy import stats
+        import matplotlib.pyplot as plt
+
+        n_routes = len(self.routes)
+        n_cols = 3
+        n_rows = (n_routes + n_cols - 1) // n_cols
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4 * n_rows))
+        axes = axes.flatten() if n_routes > 1 else [axes]
+
+        for idx, route_code in enumerate(self.routes):
+            ax = axes[idx]
+            route_data = self.df[self.df['route_code'] == route_code]
+
+            if route_data.empty or len(route_data) < 3:
+                ax.text(0.5, 0.5, f'Insufficient data',
+                       ha='center', va='center', transform=ax.transAxes)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+
+            speeds = route_data['avg_speed'].dropna()
+
+            # Create Q-Q plot
+            stats.probplot(speeds, dist="norm", plot=ax)
+
+            # Get route label
+            route_label = self.routes_df[self.routes_df['route_code'] == route_code]
+            if not route_label.empty and 'label_short' in route_label.columns:
+                label = route_label['label_short'].iloc[0]
+            else:
+                label = route_code
+
+            ax.set_title(f'{label}', fontsize=10, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+
+        # Hide extra subplots
+        for idx in range(n_routes, len(axes)):
+            axes[idx].set_visible(False)
+
+        fig.suptitle('Q-Q Plots: Normality Assessment for All Routes',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        plt.show()
+
+    def plot_residual_diagnostics(self, route_code: str) -> None:
+        """
+        Generate residual diagnostic plots for model validation.
+
+        Creates diagnostic plots for residuals from R³S² scoring:
+        1. Residuals vs Fitted values
+        2. Histogram of residuals
+        3. Q-Q plot of residuals
+        4. Scale-Location plot
+
+        These plots help assess:
+        - Homoscedasticity (constant variance)
+        - Normality of residuals
+        - Presence of outliers or influential points
+        - Model adequacy
+
+        Parameters
+        ----------
+        route_code : str
+            Route identifier
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> analyzer.plot_residual_diagnostics('VJRQ+2M|RMJJ+F4')
+        """
+        from scipy import stats
+        import matplotlib.pyplot as plt
+
+        # Get data for this route
+        route_data = self.df[self.df['route_code'] == route_code].copy()
+
+        if route_data.empty:
+            print(f"No data available for route: {route_code}")
+            return
+
+        # Compute fitted values (mean by hour and day-of-week)
+        if 'day_of_week' not in route_data.columns:
+            from data_utils import compute_temporal_features
+            route_data = compute_temporal_features(route_data)
+
+        fitted = route_data.groupby(['hour', 'day_of_week'])['avg_speed'].transform('mean')
+        route_data['fitted'] = fitted
+        route_data['residuals'] = route_data['avg_speed'] - route_data['fitted']
+        route_data['std_residuals'] = (route_data['residuals'] - route_data['residuals'].mean()) / route_data['residuals'].std()
+        route_data['sqrt_std_residuals'] = np.sqrt(np.abs(route_data['std_residuals']))
+
+        # Get route label
+        route_label = self.routes_df[self.routes_df['route_code'] == route_code]
+        if not route_label.empty and 'label_short' in route_label.columns:
+            label = route_label['label_short'].iloc[0]
+        else:
+            label = route_code
+
+        # Create figure with 4 subplots
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+        # Plot 1: Residuals vs Fitted
+        axes[0, 0].scatter(route_data['fitted'], route_data['residuals'],
+                          alpha=0.5, s=20)
+        axes[0, 0].axhline(y=0, color='red', linestyle='--', linewidth=2)
+        axes[0, 0].set_xlabel('Fitted Values', fontsize=10, fontweight='bold')
+        axes[0, 0].set_ylabel('Residuals', fontsize=10, fontweight='bold')
+        axes[0, 0].set_title('Residuals vs Fitted', fontsize=11, fontweight='bold')
+        axes[0, 0].grid(True, alpha=0.3)
+
+        # Plot 2: Histogram of residuals
+        axes[0, 1].hist(route_data['residuals'], bins=30, density=True,
+                       alpha=0.7, edgecolor='black')
+        mu, sigma = route_data['residuals'].mean(), route_data['residuals'].std()
+        x = np.linspace(route_data['residuals'].min(), route_data['residuals'].max(), 100)
+        axes[0, 1].plot(x, stats.norm.pdf(x, mu, sigma), 'r-', linewidth=2,
+                       label=f'Normal(μ={mu:.2f}, σ={sigma:.2f})')
+        axes[0, 1].set_xlabel('Residuals', fontsize=10, fontweight='bold')
+        axes[0, 1].set_ylabel('Density', fontsize=10, fontweight='bold')
+        axes[0, 1].set_title('Histogram of Residuals', fontsize=11, fontweight='bold')
+        axes[0, 1].legend(fontsize=9)
+        axes[0, 1].grid(True, alpha=0.3)
+
+        # Plot 3: Q-Q plot
+        stats.probplot(route_data['residuals'], dist="norm", plot=axes[1, 0])
+        axes[1, 0].set_title('Normal Q-Q Plot', fontsize=11, fontweight='bold')
+        axes[1, 0].grid(True, alpha=0.3)
+
+        # Plot 4: Scale-Location plot
+        axes[1, 1].scatter(route_data['fitted'], route_data['sqrt_std_residuals'],
+                          alpha=0.5, s=20)
+        axes[1, 1].set_xlabel('Fitted Values', fontsize=10, fontweight='bold')
+        axes[1, 1].set_ylabel('√|Standardized Residuals|', fontsize=10, fontweight='bold')
+        axes[1, 1].set_title('Scale-Location Plot', fontsize=11, fontweight='bold')
+        axes[1, 1].grid(True, alpha=0.3)
+
+        # Add overall title
+        fig.suptitle(f'Residual Diagnostics: {label}',
+                    fontsize=14, fontweight='bold', y=0.995)
+
+        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        plt.show()
+
+    # ========================================================================
+    # Comparative Methodology Evaluation
+    # ========================================================================
+
+    def evaluate_scoring_stability(self, window_sizes: List[int] = [5, 10, 15, 20, 30]) -> Dict[str, Any]:
+        """
+        Measure stability of different scoring methods across window sizes.
+
+        Computes rank correlations for each scoring method across different
+        rolling window sizes to assess which methods produce the most stable rankings.
+
+        Parameters
+        ----------
+        window_sizes : List[int], default=[5, 10, 15, 20, 30]
+            List of window sizes (in days) to test
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary with stability metrics for each scoring method
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> stability = analyzer.evaluate_scoring_stability()
+        >>> print(stability['summary'])
+        """
+        from scipy import stats
+
+        methods = {
+            'R³S²': lambda w: self.calculate_rrs(days_rolling=w),
+            'Percentile': lambda w: self.score_by_percentile(),
+            'Z-Score': lambda w: self.score_by_zscore(),
+            'Median': lambda w: self.score_by_median()
+        }
+
+        stability_results = {}
+
+        for method_name, method_func in methods.items():
+            # Compute scores for each window size
+            scores_by_window = {}
+            for window in window_sizes:
+                try:
+                    if method_name == 'R³S²':
+                        scores = method_func(window)
+                    else:
+                        scores = method_func()
+                    scores_by_window[window] = scores.set_index('route_code')
+                except Exception as e:
+                    continue
+
+            # Compute pairwise rank correlations
+            correlations = []
+            for i, w1 in enumerate(window_sizes[:-1]):
+                for w2 in window_sizes[i+1:]:
+                    if w1 in scores_by_window and w2 in scores_by_window:
+                        # Get scores column name (varies by method)
+                        col_name = 'points' if method_name == 'R³S²' else list(scores_by_window[w1].columns)[0]
+
+                        corr, _ = stats.spearmanr(
+                            scores_by_window[w1][col_name],
+                            scores_by_window[w2][col_name]
+                        )
+                        correlations.append(corr)
+
+            # Compute stability metrics
+            if correlations:
+                stability_results[method_name] = {
+                    'mean_correlation': np.mean(correlations),
+                    'std_correlation': np.std(correlations),
+                    'min_correlation': np.min(correlations),
+                    'max_correlation': np.max(correlations)
+                }
+            else:
+                stability_results[method_name] = {
+                    'mean_correlation': np.nan,
+                    'std_correlation': np.nan,
+                    'min_correlation': np.nan,
+                    'max_correlation': np.nan
+                }
+
+        # Create summary
+        summary_df = pd.DataFrame(stability_results).T
+        summary_df = summary_df.sort_values('mean_correlation', ascending=False)
+
+        return {
+            'stability_by_method': stability_results,
+            'summary': summary_df,
+            'interpretation': 'Higher mean correlation indicates more stable rankings across window sizes.'
+        }
+
+    def evaluate_outlier_sensitivity(self, outlier_thresholds: List[float] = [2.0, 2.5, 3.0]) -> Dict[str, Any]:
+        """
+        Evaluate sensitivity of scoring methods to outliers.
+
+        Measures how much rankings change when outliers are removed at
+        different threshold levels.
+
+        Parameters
+        ----------
+        outlier_thresholds : List[float], default=[2.0, 2.5, 3.0]
+            Z-score thresholds for defining outliers
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary with sensitivity metrics for each method
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> sensitivity = analyzer.evaluate_outlier_sensitivity()
+        >>> print(sensitivity['summary'])
+        """
+        from scipy import stats
+        from data_utils import detect_outliers
+
+        methods = {
+            'R³S²': lambda df: TrafficAnalyzer(df, self.routes_df).calculate_rrs(),
+            'Percentile': lambda df: TrafficAnalyzer(df, self.routes_df).score_by_percentile(),
+            'Z-Score': lambda df: TrafficAnalyzer(df, self.routes_df).score_by_zscore(),
+            'Median': lambda df: TrafficAnalyzer(df, self.routes_df).score_by_median()
+        }
+
+        # Baseline scores (with all data)
+        baseline_scores = {}
+        for method_name, method_func in methods.items():
+            try:
+                scores = method_func(self.df)
+                baseline_scores[method_name] = scores.set_index('route_code')
+            except Exception as e:
+                continue
+
+        sensitivity_results = {}
+
+        for method_name in baseline_scores.keys():
+            correlations = []
+
+            for threshold in outlier_thresholds:
+                # Remove outliers
+                outlier_mask = detect_outliers(self.df['avg_speed'], method='zscore', threshold=threshold)
+                df_filtered = self.df[~outlier_mask].copy()
+
+                # Compute scores without outliers
+                try:
+                    filtered_scores = methods[method_name](df_filtered)
+                    filtered_scores = filtered_scores.set_index('route_code')
+
+                    # Get score column name
+                    col_name = list(baseline_scores[method_name].columns)[0]
+
+                    # Compute rank correlation
+                    corr, _ = stats.spearmanr(
+                        baseline_scores[method_name][col_name],
+                        filtered_scores[col_name]
+                    )
+                    correlations.append(corr)
+                except Exception as e:
+                    correlations.append(np.nan)
+
+            # Compute sensitivity metrics
+            sensitivity_results[method_name] = {
+                'mean_correlation': np.mean(correlations),
+                'std_correlation': np.std(correlations),
+                'min_correlation': np.min(correlations)
+            }
+
+        # Create summary
+        summary_df = pd.DataFrame(sensitivity_results).T
+        summary_df = summary_df.sort_values('mean_correlation', ascending=False)
+
+        return {
+            'sensitivity_by_method': sensitivity_results,
+            'summary': summary_df,
+            'interpretation': 'Higher correlation indicates less sensitivity to outliers (more robust).'
+        }
+
+    def evaluate_computational_efficiency(self, n_iterations: int = 10) -> Dict[str, Any]:
+        """
+        Compare computational efficiency of different scoring methods.
+
+        Measures execution time for each scoring method to assess
+        computational cost.
+
+        Parameters
+        ----------
+        n_iterations : int, default=10
+            Number of iterations for timing
+
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary with timing metrics for each method
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> efficiency = analyzer.evaluate_computational_efficiency()
+        >>> print(efficiency['summary'])
+        """
+        import time
+
+        methods = {
+            'R³S²': lambda: self.calculate_rrs(),
+            'Percentile': lambda: self.score_by_percentile(),
+            'Z-Score': lambda: self.score_by_zscore(),
+            'Median': lambda: self.score_by_median()
+        }
+
+        timing_results = {}
+
+        for method_name, method_func in methods.items():
+            times = []
+            for _ in range(n_iterations):
+                start = time.time()
+                try:
+                    _ = method_func()
+                    elapsed = time.time() - start
+                    times.append(elapsed)
+                except Exception as e:
+                    times.append(np.nan)
+
+            timing_results[method_name] = {
+                'mean_time': np.mean(times),
+                'std_time': np.std(times),
+                'min_time': np.min(times),
+                'max_time': np.max(times)
+            }
+
+        # Create summary
+        summary_df = pd.DataFrame(timing_results).T
+        summary_df = summary_df.sort_values('mean_time')
+
+        return {
+            'timing_by_method': timing_results,
+            'summary': summary_df,
+            'interpretation': 'Lower mean time indicates better computational efficiency.'
+        }
+
+    def generate_methodology_ranking_report(self) -> pd.DataFrame:
+        """
+        Generate comprehensive report ranking scoring methods by multiple criteria.
+
+        Evaluates all scoring methods across:
+        - Stability (consistency across window sizes)
+        - Robustness (sensitivity to outliers)
+        - Efficiency (computational cost)
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame ranking methods with overall scores
+
+        Examples
+        --------
+        >>> analyzer = TrafficAnalyzer(df, routes_df)
+        >>> report = analyzer.generate_methodology_ranking_report()
+        >>> print(report)
+        """
+        print("Evaluating scoring methodologies...")
+        print("This may take a few moments...\n")
+
+        # Evaluate each criterion
+        stability = self.evaluate_scoring_stability()
+        sensitivity = self.evaluate_outlier_sensitivity()
+        efficiency = self.evaluate_computational_efficiency()
+
+        # Extract scores
+        methods = ['R³S²', 'Percentile', 'Z-Score', 'Median']
+        report_data = []
+
+        for method in methods:
+            if method in stability['stability_by_method']:
+                stability_score = stability['stability_by_method'][method]['mean_correlation']
+            else:
+                stability_score = np.nan
+
+            if method in sensitivity['sensitivity_by_method']:
+                robustness_score = sensitivity['sensitivity_by_method'][method]['mean_correlation']
+            else:
+                robustness_score = np.nan
+
+            if method in efficiency['timing_by_method']:
+                # Invert time (lower is better, so we want higher score)
+                time_val = efficiency['timing_by_method'][method]['mean_time']
+                efficiency_score = 1.0 / time_val if time_val > 0 else 0
+            else:
+                efficiency_score = np.nan
+
+            # Compute overall score (weighted average)
+            # Weights: Stability=40%, Robustness=40%, Efficiency=20%
+            scores = [stability_score, robustness_score, efficiency_score]
+            weights = [0.4, 0.4, 0.2]
+
+            valid_scores = [(s, w) for s, w in zip(scores, weights) if not np.isnan(s)]
+            if valid_scores:
+                overall_score = sum(s * w for s, w in valid_scores) / sum(w for _, w in valid_scores)
+            else:
+                overall_score = np.nan
+
+            report_data.append({
+                'Method': method,
+                'Stability': stability_score,
+                'Robustness': robustness_score,
+                'Efficiency': efficiency_score,
+                'Overall Score': overall_score
+            })
+
+        report_df = pd.DataFrame(report_data)
+        report_df = report_df.sort_values('Overall Score', ascending=False)
+
+        # Add ranking
+        report_df['Rank'] = range(1, len(report_df) + 1)
+
+        # Reorder columns
+        report_df = report_df[['Rank', 'Method', 'Overall Score', 'Stability', 'Robustness', 'Efficiency']]
+
+        # Round numeric columns
+        numeric_cols = ['Overall Score', 'Stability', 'Robustness', 'Efficiency']
+        report_df[numeric_cols] = report_df[numeric_cols].round(4)
+
+        print("\nMethodology Ranking Report")
+        print("=" * 80)
+        print(report_df.to_string(index=False))
+        print("=" * 80)
+        print("\nCriteria Weights: Stability=40%, Robustness=40%, Efficiency=20%")
+        print("Higher scores indicate better performance.")
+
+        return report_df
