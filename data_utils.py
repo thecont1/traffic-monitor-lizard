@@ -19,81 +19,102 @@ import warnings
 def preprocess_traffic_data(df: pd.DataFrame) -> pd.DataFrame:
     """
     Validate and preprocess raw traffic data.
-    
+
     Performs the following operations:
     - Validates required columns exist
+    - Calculates avg_speed if not present
     - Checks for and reports missing values
     - Validates data types
     - Checks value ranges
     - Sorts by timestamp
-    
+
     Parameters
     ----------
     df : pd.DataFrame
         Raw traffic data
-        
+
     Returns
     -------
     pd.DataFrame
         Preprocessed traffic data
-        
+
     Raises
     ------
     ValueError
         If data validation fails
     """
     df_clean = df.copy()
-    
+
+    # Calculate avg_speed if not present
+    if 'avg_speed' not in df_clean.columns:
+        if 'duration' in df_clean.columns and 'distance' in df_clean.columns:
+            df_clean['avg_speed'] = df_clean['distance'] / (df_clean['duration'] / 60)
+
     # Check for missing values
     missing_counts = df_clean.isnull().sum()
     if missing_counts.any():
         warnings.warn(f"Missing values detected:\n{missing_counts[missing_counts > 0]}")
-    
+
     # Remove rows with missing critical values
-    critical_cols = ['route_code', 'duration', 'distance', 'avg_speed']
+    critical_cols = ['route_code', 'duration', 'distance']
+    if 'avg_speed' in df_clean.columns:
+        critical_cols.append('avg_speed')
     df_clean = df_clean.dropna(subset=critical_cols)
-    
+
     # Sort by timestamp
     if all(col in df_clean.columns for col in ['year', 'month', 'day', 'hour']):
         df_clean = df_clean.sort_values(['year', 'month', 'day', 'hour']).reset_index(drop=True)
-    
+
     return df_clean
 
 
 def compute_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add temporal features to traffic data.
-    
+
     Adds the following columns:
     - timestamp: datetime object
     - day_of_week: day name (Monday, Tuesday, etc.)
     - is_weekend: boolean indicating weekend
     - time_category: categorical time period (night, morning_rush, midday, evening_rush, evening)
-    
+
     Parameters
     ----------
     df : pd.DataFrame
-        Traffic data with year, month, day, hour columns
-        
+        Traffic data with year, month, day, hour columns OR date/time columns
+
     Returns
     -------
     pd.DataFrame
         Traffic data with additional temporal features
     """
     df_enhanced = df.copy()
-    
+
+    # Parse date and time if they exist but year/month/day/hour don't
+    if 'date' in df_enhanced.columns and 'year' not in df_enhanced.columns:
+        df_enhanced['date'] = pd.to_datetime(df_enhanced['date'])
+        df_enhanced['year'] = df_enhanced['date'].dt.year
+        df_enhanced['month'] = df_enhanced['date'].dt.month
+        df_enhanced['day'] = df_enhanced['date'].dt.day
+
+    if 'time' in df_enhanced.columns and 'hour' not in df_enhanced.columns:
+        df_enhanced['hour'] = pd.to_datetime(df_enhanced['time'], format='%H:%M', errors='coerce').dt.hour
+
     # Create timestamp
     if 'timestamp' not in df_enhanced.columns:
-        df_enhanced['timestamp'] = pd.to_datetime(df_enhanced[['year', 'month', 'day', 'hour']])
-    
+        if all(col in df_enhanced.columns for col in ['year', 'month', 'day', 'hour']):
+            df_enhanced['timestamp'] = pd.to_datetime(df_enhanced[['year', 'month', 'day', 'hour']])
+        elif 'date' in df_enhanced.columns:
+            df_enhanced['timestamp'] = pd.to_datetime(df_enhanced['date'])
+
     # Add day of week
     if 'day_of_week' not in df_enhanced.columns:
         df_enhanced['day_of_week'] = df_enhanced['timestamp'].dt.day_name()
-    
+
     # Add weekend indicator
     if 'is_weekend' not in df_enhanced.columns:
         df_enhanced['is_weekend'] = df_enhanced['timestamp'].dt.dayofweek >= 5
-    
+
     # Add time category
     if 'time_category' not in df_enhanced.columns:
         df_enhanced['time_category'] = pd.cut(
@@ -102,7 +123,7 @@ def compute_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
             labels=['night', 'morning_rush', 'midday', 'evening_rush', 'evening'],
             include_lowest=True
         )
-    
+
     return df_enhanced
 
 
