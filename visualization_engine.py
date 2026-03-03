@@ -1178,6 +1178,7 @@ class VisualizationEngine:
         df = self._ensure_temporal_features(self.df)
 
         # Select routes to plot
+        auto_selected_routes = routes is None
         if routes is None:
             routes = sorted(df['route_code'].unique())
         else:
@@ -1188,7 +1189,8 @@ class VisualizationEngine:
 
         # Limit to 6 routes for readability
         if len(routes) > 6:
-            warnings.warn(f"Too many routes ({len(routes)}). Showing first 6 for readability.")
+            if not auto_selected_routes:
+                warnings.warn(f"Too many routes ({len(routes)}). Showing first 6 for readability.")
             routes = routes[:6]
 
         # Define dimensions to compare
@@ -2123,6 +2125,80 @@ class VisualizationEngine:
 
         plt.tight_layout()
         plt.show()
+
+
+    def generate_outlier_summary(self, top_n: int = 20,
+                                 route_code: Optional[str] = None,
+                                 threshold_sigma: float = 3.0) -> pd.DataFrame:
+        """
+        Generate a tabular summary of the most anomalous observations.
+
+        Anomalies are computed contextually by comparing each observation against
+        the mean speed for the same route, hour-of-day, and day-of-week.
+
+        Parameters
+        ----------
+        top_n : int, default=20
+            Maximum number of anomalous rows to return.
+        route_code : str, optional
+            Restrict analysis to a single route.
+        threshold_sigma : float, default=3.0
+            Minimum absolute z-score of deviation to consider an outlier.
+
+        Returns
+        -------
+        pd.DataFrame
+            Top anomalies sorted by absolute deviation_sigma (descending).
+        """
+        # Ensure temporal features exist
+        df = self._ensure_temporal_features(self.df)
+
+        # Optional route filter
+        if route_code is not None:
+            out_df = df[df['route_code'] == route_code].copy()
+            if out_df.empty:
+                warnings.warn(f"No data available for route: {route_code}")
+                return pd.DataFrame()
+        else:
+            out_df = df.copy()
+
+        # Contextual expected speed by route/hour/day
+        out_df['expected_speed'] = out_df.groupby(
+            ['route_code', 'hour', 'day_of_week']
+        )['avg_speed'].transform('mean')
+        out_df['deviation'] = out_df['avg_speed'] - out_df['expected_speed']
+
+        # Convert deviation to sigma units; avoid divide-by-zero
+        context_std = out_df.groupby(['route_code', 'hour', 'day_of_week'])['avg_speed'].transform('std')
+        context_std = context_std.replace(0, np.nan)
+        out_df['deviation_sigma'] = out_df['deviation'] / context_std
+        out_df['deviation_sigma'] = out_df['deviation_sigma'].replace([np.inf, -np.inf], np.nan)
+
+        # Filter and rank anomalies
+        anomalies = out_df[out_df['deviation_sigma'].abs() >= threshold_sigma].copy()
+        if anomalies.empty:
+            return pd.DataFrame(columns=[
+                'timestamp', 'route_code', 'route_label', 'hour', 'day_of_week',
+                'avg_speed', 'expected_speed', 'deviation', 'deviation_sigma'
+            ])
+
+        anomalies['abs_deviation_sigma'] = anomalies['deviation_sigma'].abs()
+        anomalies['route_label'] = anomalies['route_code'].apply(self._get_route_label)
+
+        anomalies = anomalies.sort_values('abs_deviation_sigma', ascending=False)
+        anomalies = anomalies.head(top_n)
+
+        result_cols = [
+            'timestamp', 'route_code', 'route_label', 'hour', 'day_of_week',
+            'avg_speed', 'expected_speed', 'deviation', 'deviation_sigma'
+        ]
+        result = anomalies[result_cols].copy()
+
+        # Keep display-friendly precision
+        for col in ['avg_speed', 'expected_speed', 'deviation', 'deviation_sigma']:
+            result[col] = result[col].round(3)
+
+        return result.reset_index(drop=True)
 
 
 

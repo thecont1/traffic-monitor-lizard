@@ -360,6 +360,7 @@ class TrafficAnalyzer:
             - 'rank_correlation': Spearman correlation between rankings
             - 'rank_correlation_pvalue': p-value for rank correlation
             - 'n_outliers_removed': Number of outliers removed
+            - 'outliers_removed': Alias for backward compatibility
             
         Examples
         --------
@@ -401,7 +402,8 @@ class TrafficAnalyzer:
             'filtered_scores': filtered_scores,
             'rank_correlation': rank_corr,
             'rank_correlation_pvalue': rank_p,
-            'n_outliers_removed': int(n_outliers)
+            'n_outliers_removed': int(n_outliers),
+            'outliers_removed': int(n_outliers)
         }
     
     def analyze_rrs_stability(self, window_sizes: List[int] = [5, 10, 15, 20, 30]) -> pd.DataFrame:
@@ -550,7 +552,7 @@ class TrafficAnalyzer:
         date_range = pd.date_range(
             start=df_temp['timestamp'].min(),
             end=df_temp['timestamp'].max(),
-            freq='H'
+            freq='h'
         )
         
         # Calculate completeness for each route
@@ -665,7 +667,7 @@ class TrafficAnalyzer:
         date_range = pd.date_range(
             start=df_temp['timestamp'].min(),
             end=df_temp['timestamp'].max(),
-            freq='H'
+            freq='h'
         )
         expected_total = len(date_range) * len(self.routes)
         actual_total = len(self.df)
@@ -1035,11 +1037,24 @@ class TrafficAnalyzer:
             
             # Anderson-Darling test
             if len(route_speeds) >= 8:
-                anderson_result = stats.anderson(route_speeds, dist='norm')
+                try:
+                    # SciPy >=1.17 requires explicitly selecting p-value method
+                    anderson_result = stats.anderson(
+                        route_speeds,
+                        dist='norm',
+                        method='interpolate'
+                    )
+                except TypeError:
+                    # Backward compatibility for older SciPy versions
+                    anderson_result = stats.anderson(route_speeds, dist='norm')
+
                 anderson_stat = anderson_result.statistic
-                # Use 5% significance level (index 2)
-                anderson_critical = anderson_result.critical_values[2]
-                anderson_p = 0.05 if anderson_stat > anderson_critical else 0.10
+                if hasattr(anderson_result, 'pvalue') and anderson_result.pvalue is not None:
+                    anderson_p = float(anderson_result.pvalue)
+                else:
+                    # Fallback for older SciPy API without p-value
+                    anderson_critical = anderson_result.critical_values[2]
+                    anderson_p = 0.05 if anderson_stat > anderson_critical else 0.10
             else:
                 anderson_stat, anderson_p = np.nan, np.nan
             
