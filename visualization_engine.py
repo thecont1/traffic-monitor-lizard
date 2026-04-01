@@ -386,15 +386,11 @@ class VisualizationEngine:
             heatmap_data = heatmap_data.reindex(day_order)
             heatmap_data = heatmap_data.reindex(columns=range(24))
 
-            # Get route color for colormap
-            route_color = self._get_route_color(route)
-
-            # Create custom colormap based on route color
-            # Use white for low values and route color for high values
+            # Fixed blue colormap: dark blue = slow (congested), white = fast
             from matplotlib.colors import LinearSegmentedColormap
             cmap = LinearSegmentedColormap.from_list(
-                'route_cmap',
-                ['#f7f7f7', route_color],
+                'traffic_cmap',
+                ['#28609bff', '#f7f7f7ff'],  # dark blue → white
                 N=256
             )
 
@@ -411,10 +407,15 @@ class VisualizationEngine:
             )
 
             # Format labels
+            date_min = df['timestamp'].min().strftime('%d %b %Y')
+            date_max = df['timestamp'].max().strftime('%d %b %Y')
             ax.set_xlabel('Hour of Day', fontsize=11)
             ax.set_ylabel('Day of Week', fontsize=11)
-            ax.set_title(f'Hourly Speed Heatmap: {self._get_route_label(route)}',
-                        fontsize=12, fontweight='bold')
+            ax.set_title(
+                f'Hourly Speed Heatmap: {self._get_route_label(route)}\n'
+                f'{date_min} – {date_max}',
+                fontsize=12, fontweight='bold'
+            )
 
             # Format x-axis labels (show every 3 hours)
             hour_labels = [self._format_hour_label(h) if h % 3 == 0 else '' for h in range(24)]
@@ -725,9 +726,9 @@ class VisualizationEngine:
             print(f"Error details: {str(e)}")
             return
 
-    def plot_hour_of_day_profiles(self) -> None:
+    def plot_hour_of_day_profiles(self, route_codes: list[str] | None = None) -> None:
         """
-        Generate hour-of-day profile plots comparing all routes on the same axes.
+        Generate hour-of-day profile plots comparing selected routes on the same axes.
 
         Creates a line plot showing average speed by hour of day for all routes:
         - X-axis: Hour of day (0-23)
@@ -742,15 +743,22 @@ class VisualizationEngine:
         Examples
         --------
         >>> viz.plot_hour_of_day_profiles()
+        >>> viz.plot_hour_of_day_profiles(['ROUTE_A', 'ROUTE_B'])
         """
         # Ensure temporal features exist
         df = self._ensure_temporal_features(self.df)
+
+        selected_routes = self.routes if route_codes is None else [r for r in self.routes if r in set(route_codes)]
+
+        if not selected_routes:
+            warnings.warn("No valid routes selected for hour-of-day profile plot.")
+            return
 
         # Create figure
         fig, ax = plt.subplots(figsize=(14, 7))
 
         # Compute hourly statistics for each route
-        for route_code in self.routes:
+        for route_code in selected_routes:
             route_data = df[df['route_code'] == route_code]
 
             if route_data.empty:
@@ -787,7 +795,8 @@ class VisualizationEngine:
         # Format plot
         ax.set_xlabel('Hour of Day', fontsize=12, fontweight='bold')
         ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
-        ax.set_title('Hour-of-Day Speed Profiles: All Routes Comparison\n'
+        title_suffix = 'All Routes Comparison' if route_codes is None else f"Selected Routes ({len(selected_routes)})"
+        ax.set_title(f'Hour-of-Day Speed Profiles: {title_suffix}\n'
                     '(Shaded regions show ±1 standard deviation)',
                     fontsize=14, fontweight='bold', pad=20)
 
@@ -795,6 +804,8 @@ class VisualizationEngine:
         ax.set_xticks(range(0, 24, 2))
         ax.set_xticklabels([self._format_hour_label(h) for h in range(0, 24, 2)],
                           rotation=45, ha='right')
+        ax.set_xlim(0, 23)
+        ax.margins(x=0)
 
         # Add grid
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
@@ -1061,7 +1072,7 @@ class VisualizationEngine:
         """
         # Default metrics if none specified
         if metrics is None:
-            metrics = ['avg_speed', 'duration', 'speed_variance']
+            metrics = ['avg_speed', 'speed_min', 'speed_max', 'speed_std', 'speed_variance', 'duration', 'distance']
 
         # Compute route-level aggregated metrics
         route_metrics = self.df.groupby('route_code').agg({

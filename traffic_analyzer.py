@@ -569,7 +569,9 @@ class TrafficAnalyzer:
             for hour in range(24):
                 hour_data = route_data[route_data['hour'] == hour]
                 expected_hour = len(date_range) / 24
-                actual_hour = len(hour_data)
+                # Count distinct dates covered, not raw rows, to avoid inflation
+                # from multiple readings within the same hour on the same day
+                actual_hour = hour_data['date'].nunique() if 'date' in hour_data.columns else len(hour_data)
                 hour_pct = (actual_hour / expected_hour * 100) if expected_hour > 0 else 0
                 
                 results.append({
@@ -577,7 +579,7 @@ class TrafficAnalyzer:
                     'hour': hour,
                     'completeness_pct': hour_pct,
                     'expected_count': int(expected_hour),
-                    'actual_count': len(hour_data)
+                    'actual_count': actual_hour
                 })
         
         completeness_df = pd.DataFrame(results)
@@ -1453,6 +1455,24 @@ class TrafficAnalyzer:
                 'expected_benefit': 'More robust route performance assessment'
             })
         
+        # Check for systematically missing hours (e.g. scraper/runner failures)
+        completeness = self.analyze_data_completeness()
+        hour_avg = completeness.groupby('hour')['completeness_pct'].mean()
+        dead_hours = hour_avg[hour_avg < 90].index.tolist()
+        if dead_hours:
+            recommendations.append({
+                'type': 'systematic_collection_failure',
+                'severity': 'high',
+                'description': (
+                    f"Hours {dead_hours} have below 90% data coverage across all routes "
+                    f"(avg completeness: {hour_avg[dead_hours].mean():.1f}%). "
+                    "This indicates a systematic collection failure (e.g. a scheduled scraper not running) "
+                    "rather than random missing data. These hours cannot be reliably interpolated and "
+                    "should be excluded from time-of-day comparisons and travel time recommendations."
+                ),
+                'expected_benefit': 'Prevents misleading conclusions from structurally absent data'
+            })
+
         # If no issues found
         if not recommendations:
             recommendations.append({

@@ -21,7 +21,7 @@ def preprocess_traffic_data(df: pd.DataFrame) -> pd.DataFrame:
     Validate and preprocess raw traffic data.
 
     Performs the following operations:
-    - Validates required columns exist
+    - Deduplicates rows by (route_code, date/time or year/month/day/hour)
     - Calculates avg_speed if not present
     - Checks for and reports missing values
     - Validates data types
@@ -44,6 +44,18 @@ def preprocess_traffic_data(df: pd.DataFrame) -> pd.DataFrame:
         If data validation fails
     """
     df_clean = df.copy()
+
+    # Deduplicate: same route, same day, same hour, same duration+distance
+    # Catches re-ingested readings that differ only by collection timestamp within the hour
+    if 'hour' not in df_clean.columns and 'time' in df_clean.columns:
+        df_clean['hour'] = pd.to_datetime(df_clean['time'], format='%H:%M', errors='coerce').dt.hour
+    dedup_cols = [c for c in ['route_code', 'date', 'hour', 'duration', 'distance'] if c in df_clean.columns]
+    if dedup_cols:
+        before = len(df_clean)
+        df_clean = df_clean.drop_duplicates(subset=dedup_cols, keep='first')
+        removed = before - len(df_clean)
+        if removed > 0:
+            print(f"Dedup: removed {removed} duplicate rows based on {dedup_cols}")
 
     # Calculate avg_speed if not present
     if 'avg_speed' not in df_clean.columns:
@@ -119,8 +131,8 @@ def compute_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
     if 'time_category' not in df_enhanced.columns:
         df_enhanced['time_category'] = pd.cut(
             df_enhanced['hour'],
-            bins=[0, 6, 10, 16, 20, 24],
-            labels=['night', 'morning_rush', 'midday', 'evening_rush', 'evening'],
+            bins=[0, 6, 8, 11, 14, 18, 21, 24],
+            labels=['late_night', 'morning', 'morning_rush', 'early_afternoon', 'late_afternoon', 'evening_rush', 'night'],
             include_lowest=True
         )
 
