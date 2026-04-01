@@ -811,7 +811,8 @@ class VisualizationEngine:
         ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
 
         # Add legend
-        ax.legend(loc='best', framealpha=0.9, fontsize=9)
+        if selected_routes:
+            ax.legend(loc='best', framealpha=0.9, fontsize=9)
 
         # Set reasonable y-axis limits
         ax.set_ylim(bottom=0)
@@ -1032,7 +1033,7 @@ class VisualizationEngine:
         print("=" * 60)
         print("Note: Higher rank range indicates more volatile performance throughout the day")
 
-    def plot_parallel_coordinates(self, metrics: Optional[List[str]] = None) -> None:
+    def plot_parallel_coordinates(self, metrics: Optional[List[str]] = None, route_codes: Optional[List[str]] = None) -> None:
         """
         Generate parallel coordinates plot showing multiple metrics simultaneously.
 
@@ -1047,6 +1048,8 @@ class VisualizationEngine:
             ['avg_speed', 'duration', 'distance', 'speed_variance']
             Available metrics: 'avg_speed', 'duration', 'distance', 'speed_variance',
             'speed_std', 'speed_min', 'speed_max'
+        route_codes : Optional[List[str]], default None
+            Route codes to include in the plot. If None, plots all routes.
 
         Returns
         -------
@@ -1074,8 +1077,32 @@ class VisualizationEngine:
         if metrics is None:
             metrics = ['avg_speed', 'speed_min', 'speed_max', 'speed_std', 'speed_variance', 'duration', 'distance']
 
+        # Filter to selected routes when provided
+        df = self.df
+        if route_codes is not None:
+            route_codes = [r for r in self.routes if r in set(route_codes)]
+            df = df[df['route_code'].isin(route_codes)].copy()
+
+        if df.empty:
+            # Create an empty chart scaffold
+            self._set_figure_style(figsize=(14, 8))
+            fig, ax = plt.subplots(figsize=(14, 8))
+
+            ax.set_title('No valid routes selected for parallel coordinates plot.',
+                         fontsize=14, fontweight='bold', pad=20)
+            ax.set_xlabel('Metrics')
+            ax.set_ylabel('Normalized Value (0-1 scale)')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+            ax.set_axisbelow(True)
+
+            plt.tight_layout()
+            plt.show()
+            return
+
         # Compute route-level aggregated metrics
-        route_metrics = self.df.groupby('route_code').agg({
+        route_metrics = df.groupby('route_code').agg({
             'avg_speed': ['mean', 'std', 'min', 'max'],
             'duration': 'mean',
             'distance': 'mean'
@@ -1086,7 +1113,7 @@ class VisualizationEngine:
                                   'speed_max', 'duration', 'distance']
 
         # Add variance metric
-        route_metrics['speed_variance'] = self.df.groupby('route_code')['avg_speed'].var().values
+        route_metrics['speed_variance'] = df.groupby('route_code')['avg_speed'].var().values
 
         # Validate requested metrics
         available_metrics = ['avg_speed', 'duration', 'distance', 'speed_variance',
