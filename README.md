@@ -1,33 +1,40 @@
-# 🚗📊 Bangalore Traffic Monitor - Complete User Guide
+# 🚗📊 Bangalore Traffic Monitor
 
-(((((  🚧 WORK ACTIVELY IN PROGRESS 🚧  ))))
+A comprehensive system for monitoring, analyzing, and visualizing real-time traffic conditions on key routes throughout Bangalore city. Perfect for commuters, city planners, and anyone interested in understanding traffic patterns in India's Silicon Valley.
 
-## Introduction
+## 🌟 Features
 
-A smart system that automatically monitors and analyzes real-time traffic conditions on key routes throughout Bangalore city. Perfect for commuters, city planners, and anyone curious about traffic patterns in India's Silicon Valley known best for... its traffic problems!
+### Core Capabilities
+- **Automated Data Collection**: Uses Google Maps to automatically collect travel times and distances
+- **Real-time Monitoring**: Track traffic conditions across multiple routes simultaneously
+- **Historical Analysis**: Analyze traffic patterns over days, weeks, or months
+- **Advanced Visualizations**: 30+ different plot types for comprehensive traffic analysis
+- **Statistical Analysis**: R³S² scoring methodology with correlation, sensitivity, and stability testing
+- **Anomaly Detection**: Identify unusual traffic conditions and outliers
+- **Predictive Insights**: Forecast traffic patterns and recommend optimal travel times
+- **Interactive Dashboards**: Dynamic filtering and exploration with widgets
 
-The system uses **Google Maps** to check travel times between various locations around Bangalore. It:
+### Analysis Features
+- Time series decomposition (trend, seasonal, residual)
+- Comparative route performance analysis
+- Hour-of-day and day-of-week patterns
+- Route correlation and similarity analysis
+- Data quality assessment and completeness reporting
+- Alternative scoring methods comparison
+- Statistical hypothesis testing
 
-1. **Automatically visits** Google Maps for each route
-2. **Extracts** current travel time and distance data
-3. **Calculates** average speeds and traffic conditions
-4. **Stores** everything in CSV files for analysis
-5. **Generates** visual reports and insights
-
-All of this happens automatically using web automation - no manual checking required!
-
-## Table of Contents
+## 📋 Table of Contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Data Collection](#data-collection)
+- [Data Analysis](#data-analysis)
+- [Visualization Guide](#visualization-guide)
+- [Advanced Analysis](#advanced-analysis)
 - [Configuration](#configuration)
-- [Usage](#usage)
-- [Plotting and Visualization](#plotting-and-visualization)
-- [Route Ranking System](#route-ranking-system)
 - [Troubleshooting](#troubleshooting)
-- [Advanced Customization](#advanced-customization)
 
-## Installation
+## 🔧 Installation
 
 ### Prerequisites
 
@@ -36,206 +43,448 @@ All of this happens automatically using web automation - no manual checking requ
 - Chrome browser (for web automation)
 - Internet connection (for Google Maps access)
 
-### Step-by-Step Setup
+### Setup
 
-1. **Clone the repository** and navigate to the project folder:
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/<your-username>/blr-traffic-monitor.git
    cd blr-traffic-monitor
    ```
-   *(Replace `<your-username>` with the actual GitHub username or use the full repository URL)*
 
-2. **Setup environment with uv** (creates venv and installs dependencies):
+2. **Install dependencies with uv**:
    ```bash
    uv sync
    ```
 
 3. **Verify installation**:
    ```bash
-   uv run python -c "import pandas, selenium; print('All dependencies installed!')"
+   uv run python -c "import pandas, selenium, scipy, statsmodels; print('✓ All dependencies installed!')"
    ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### First Run
+### 1. Collect Traffic Data
 
-   ```bash
-   uv run python traffic_snapshot.py
-   ```
+Run the data collector to gather current traffic information:
+
+```bash
+uv run python traffic_snapshot.py
+```
 
 The script will:
+- Open Chrome browser automatically
+- Visit Google Maps for each configured route
+- Extract travel times and distances
+- Save data to CSV files
 
-   - Open Chrome browser automatically
-   - Visit Google Maps for each route
-   - Extract travel times and distances
-   - Output CSV rows to stdout (for workflow capture)
-   - Print a summary message
+### 2. Analyze Data in Jupyter
 
-### What You'll See
+Open the analysis notebook:
 
-- **Browser windows** opening and closing (this is normal - the script is automating Google Maps)
-- **CSV files** created in the project folder with traffic data
-- **Plot windows** showing traffic analysis
+```bash
+uv run jupyter notebook traffic_visual.ipynb
+```
 
-### Sample Output
+Or use the comprehensive examples notebook:
 
-After the first run, you'll have:
-- [csv-bangalore_traffic.csv](cci:7://file:///Users/home/DEV/MY%20PROJECTS/blr-traffic-monitor/csv-bangalore_traffic.csv:0:0-0:0) - All traffic data
-- `csv-routes.csv` - Route definitions and labels
-- Various plot visualizations
+```bash
+uv run jupyter notebook traffic_analysis_examples.ipynb
+```
 
-## Configuration
+### 3. View Results
 
-### Route Customization
+The system generates:
+- `csv-bangalore_traffic.csv` - All collected traffic data
+- `csv-routes.csv` - Route definitions and metadata
+- Various visualization plots and reports
 
-Edit `routes_df` in [traffic_visual.ipynb](cci:7://file:///Users/home/DEV/MY%20PROJECTS/blr-traffic-monitor/traffic_visual.ipynb:0:0-0:0) to add/remove routes:
+## 📊 Data Collection
+
+### Basic Collection
+
+Collect data and append to CSV:
+
+```bash
+uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
+```
+
+### Automated Collection
+
+Set up a cron job for regular data collection:
+
+```bash
+# Collect data every hour
+0 * * * * cd /path/to/blr-traffic-monitor && uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
+```
+
+### Route Configuration
+
+Edit routes in `traffic_snapshot.py` or `traffic_visual.ipynb`:
 
 ```python
 routes_df = pd.DataFrame({
     "route_code": [
-        "VJRQ+2M|RMJJ+F4",     # Kudlu Gate Metro Station → Biocon Campus
-        "WH5F+26|WJ8X+F5W",    # Jaya Prakash Nagar Metro Station → Hemavathi Park, HSR Layout
-        "XJPW+92|WJP4+FF",     # Swami Vivekananda Road Metro Station → Christ University, Hosur Main Road
-        "2HVW+G8|XJXR+WG",     # Bethel AG Church, Hebbal → SMVT Railway Station
-        "WGG8+G5|XH7P+G6",     # The Watering Hole, Rajarajeshwari Nagar → Sir Puttanna Chetty Town Hall, Bangalore
-        "XPC7+72|XM33+J3",     # The Rameshwaram Cafe @ Brookfield → Gawky Goose, Wind Tunnel Rd
-        "WHCJ+26|XGCP+FV",     # RV Road Metro Station, Jayanagar 5th Block → Vijayanagar Metro Station, Chord Road
-        "XMW9+G8|WMJR+V4",     # Benniganahalli Metro Station → Embassy TechVillage, Devarabisanahalli
-        "XHJ7+MG|WJM6+VC",     # Lulu Mall Bengaluru → Nexus Mall Koramangala
-        "WHR9+R6|XJGF+6J",     # Big Bull Temple, Basavanagudi → Shri Someshwara Swamy Temple, Halasuru
-    ]})
+        "VJRQ+2M|RMJJ+F4",     # Kudlu Gate Metro → Biocon Campus
+        "WH5F+26|WJ8X+F5W",    # JP Nagar Metro → Hemavathi Park
+        # Add more routes...
+    ],
+    "label_short": ["Kudlu→Biocon", "JPNagar→HSR", ...],
+    "label_full": ["Kudlu Gate Metro Station → Biocon Campus", ...],
+    "color_hex": ["#FF6B6B", "#4ECDC4", ...]
+})
 ```
 
-### Data Collection Settings
+## 📈 Data Analysis
 
-In `traffic_snapshot.py`, the script uses stream-based output:
-- Outputs new data rows to stdout (one CSV line per route)
-- Workflow captures and appends to CSV (no memory overhead)
-- Prints summary as final line (for commit message)
-- Deduplication handled by workflow using awk
-
-## Usage
-
-### Basic Data Collection
-
-1. **Run the collector**:
-   ```bash
-   uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
-   ```
-
-2. **Monitor progress** - the script will print CSV rows, then a summary message
-
-3. **Stop anytime** - press Ctrl+C to stop early
-
-### Data Analysis
-
-Open [traffic_visual.ipynb](cci:7://file:///Users/home/DEV/MY%20PROJECTS/blr-traffic-monitor/traffic_visual.ipynb:0:0-0:0) in Jupyter Notebook:
-
-1. **Load and process data**:
-   ```python
-   from data_manager import get_merged_data
-   
-   # Load merged data (active + archives for full history)
-   master_df = get_merged_data()
-   
-   # Or load only recent data (last 30 days)
-   from data_manager import get_active_data
-   master_df = get_active_data()
-   
-   # Process into analysis-ready format
-   df = transformed_data(master_df)
-   ```
-
-2. **View data summary**:
-   ```python
-   display(df.describe())
-   ```
-
-## Plotting and Visualization
-
-### Traffic Square (Time Series)
-
-Show traffic speeds over time for all routes:
+### Loading Data
 
 ```python
-# Basic plot - last 24 hours, short labels
-df_plot = plot_traffic_square(df, days_offset=1, label='short', height='square', dpi=300)
+from data_utils import preprocess_traffic_data, compute_temporal_features
+import pandas as pd
 
-# Advanced - last 7 days, full labels, wide format
-df_plot = plot_traffic_square(df, days_offset=7, label='full', height='extrawide', dpi=300)
+# Load data
+df = pd.read_csv('csv-bangalore_traffic.csv')
+routes_df = pd.read_csv('csv-routes.csv')
+
+# Preprocess and add temporal features
+df = preprocess_traffic_data(df)
+df = compute_temporal_features(df)
 ```
 
-
-**Parameters:**
-- `days_offset`: How many days back to show (1 = last 24 hours)
-- `label`: 'short' (Hosur Road) or 'full' (Kudlu Gate Metro Station → Biocon Campus)
-- `height`: 'square', 'wide', 'extrawide', 'extrawide2' (controls figure size and hour intervals)
-
-![Traffic Square](images/plot01.png)
-
-### Route Boxplots
-
-Compare route performance distributions:
+### Basic Statistics
 
 ```python
-# Both speed and duration boxplots
-plot_route_boxplots(df, avg_speed=True, duration=True, legend=True, show_stats=True)
+# View summary statistics
+print(df.describe())
 
-# Speed only, no x-axis labels, no median annotations
-plot_route_boxplots(df, avg_speed=True, duration=False, legend=False, show_stats=False)
+# Check data completeness
+print(f"Date range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+print(f"Total observations: {len(df):,}")
+print(f"Routes: {df['route_code'].nunique()}")
 ```
 
-**Parameters:**
-- `avg_speed`: Include average speed boxplot
-- `duration`: Include duration boxplot  
-- `legend`: Show route labels on x-axis
-- `show_stats`: Show median values and sample sizes on each box
-
-![Route Boxplots](images/plot02.png)
-
-### Chaining Plots
-
-Use one plot's output as another's input:
+### TrafficAnalyzer - Statistical Analysis
 
 ```python
-# Get time series data for last week
-df_plot = plot_traffic_square(df, days_offset=7, label='full', height='extrawide', dpi=300)
+from traffic_analyzer import TrafficAnalyzer
 
-# Generate boxplots from that data
-plot_route_boxplots(df_plot, avg_speed=True, duration=True, legend=False)
+# Initialize analyzer
+analyzer = TrafficAnalyzer(df, routes_df)
+
+# Calculate R³S² scores
+rrs_scores = analyzer.calculate_rrs()
+print(rrs_scores[['route_code', 'rrs_points', 'rank']].head())
+
+# Analyze correlations
+correlation_results = analyzer.analyze_rrs_correlation()
+print(f"Pearson correlation: {correlation_results['pearson_correlation']:.4f}")
+
+# Check sensitivity to outliers
+sensitivity = analyzer.analyze_rrs_sensitivity()
+print(f"Rank correlation after removing outliers: {sensitivity['rank_correlation']:.4f}")
+
+# Analyze stability across time windows
+stability = analyzer.analyze_rrs_stability()
+print("Stability correlation matrix:")
+print(stability)
+
+# Get recommendations
+recommendations = analyzer.generate_recommendations()
+for i, rec in enumerate(recommendations, 1):
+    print(f"{i}. {rec}")
 ```
 
-![Traffic Square with Boxplots](images/plot03.png)
+## 🎨 Visualization Guide
 
-## Route Ranking System
-
-### Rolling Route Score (R³S²)
-
-Calculate a 10-day rolling performance score:
+### VisualizationEngine - Creating Plots
 
 ```python
-# Calculate 10-day rolling scores
-df_rrs = calculate_rrs(df, DAYS_ROLLING=10)
+from visualization_engine import VisualizationEngine
 
-# Add human-readable route names
-df_rrs['route'] = df_rrs['route_code'].map(
-    lambda x: locate(x.split('|')[0]) + '→' + locate(x.split('|')[1])
+# Initialize visualization engine
+viz = VisualizationEngine(df, routes_df)
+```
+
+### Temporal Pattern Visualizations
+
+```python
+# Hourly heatmap - shows speed patterns by hour and day-of-week
+viz.plot_hourly_heatmap('VJRQ+2M|RMJJ+F4')
+
+# Time series decomposition - trend, seasonal, residual components
+viz.plot_time_series_decomposition('VJRQ+2M|RMJJ+F4')
+
+# Hour-of-day profiles - compare all routes
+viz.plot_hour_of_day_profiles()
+
+# Correlation matrix - find routes with similar patterns
+viz.plot_correlation_matrix()
+
+# Ranking animation - see how rankings change throughout the day
+viz.create_ranking_animation()
+```
+
+### Comparative Performance
+
+```python
+# Parallel coordinates - multi-dimensional comparison
+viz.plot_parallel_coordinates()
+
+# Radar chart - compare routes across dimensions
+viz.plot_radar_chart()
+
+# Speed vs duration scatter plot
+viz.plot_speed_duration_scatter()
+
+# Time-of-day facets - distributions by time period
+viz.plot_time_of_day_facets()
+
+# CDF comparison - travel time reliability
+viz.plot_cdf_comparison()
+```
+
+### Anomaly Detection
+
+```python
+# Control chart - statistical process control
+viz.plot_control_chart('VJRQ+2M|RMJJ+F4')
+
+# Anomaly scatter - contextual anomaly detection
+viz.plot_anomaly_scatter('VJRQ+2M|RMJJ+F4')
+
+# Deviation timeline - deviations from expected patterns
+viz.plot_deviation_timeline('VJRQ+2M|RMJJ+F4')
+
+# Outlier summary - top anomalous observations
+outliers = viz.generate_outlier_summary(top_n=20)
+print(outliers)
+```
+
+### Predictive Insights
+
+```python
+# Forecast - predict next 24 hours
+viz.plot_forecast('VJRQ+2M|RMJJ+F4', hours_ahead=24)
+
+# Typical day profile - patterns by day-of-week
+viz.plot_typical_day_profile()
+
+# Current vs predicted - identify deviations
+viz.plot_current_vs_predicted('VJRQ+2M|RMJJ+F4')
+
+# Best travel times - optimal departure recommendations
+viz.plot_best_travel_times()
+```
+
+### Interactive Dashboards
+
+```python
+# Create interactive widgets
+route_selector = viz.create_route_selector()
+time_slider = viz.create_time_range_slider()
+agg_toggle = viz.create_aggregation_toggle()
+
+# Display widgets in Jupyter
+from IPython.display import display
+display(route_selector)
+display(time_slider)
+display(agg_toggle)
+
+# Create linked plots with Plotly
+fig = viz.create_linked_plots(route_codes=['VJRQ+2M|RMJJ+F4', 'WH5F+26|WJ8X+F5W'])
+fig.show()
+
+# Generate summary table with filters
+summary = viz.create_summary_table(
+    route_codes=route_selector.value,
+    start_date='2024-01-01',
+    end_date='2024-01-31',
+    aggregation='D'
 )
-df_rrs = df_rrs[['route', 'points']]
+display(summary)
 
-display(df_rrs)
+# Export HTML report
+report_path = viz.export_report_template(
+    'traffic_report.html',
+    route_codes=['VJRQ+2M|RMJJ+F4', 'WH5F+26|WJ8X+F5W'],
+    include_visualizations=True
+)
 ```
 
-### Route Performance Visualization
+## 🔬 Advanced Analysis
 
-Change the rolling window:
+### Alternative Scoring Methods
 
 ```python
-# 5-day rolling score
-df_rrs = calculate_rrs(df, DAYS_ROLLING=5)
+# Compare different scoring approaches
+comparison = analyzer.compare_scoring_methods()
 
-# 30-day rolling score  
-df_rrs = calculate_rrs(df, DAYS_ROLLING=30)
+print("Correlation between methods:")
+print(comparison['correlation_matrix'])
+
+print("\nStability metrics:")
+print(comparison['stability'])
 ```
 
-![R³S² Score](images/plot04.png)
+### Statistical Testing
+
+```python
+# Test normality of speed distributions
+normality = analyzer.test_normality()
+for route, result in list(normality.items())[:3]:
+    print(f"{route}: p-value = {result['shapiro_pvalue']:.4f}")
+
+# Test stationarity
+stationarity = analyzer.test_stationarity()
+
+# Analyze autocorrelation
+acf_results = analyzer.analyze_autocorrelation()
+
+# Test variance homogeneity
+variance_test = analyzer.test_variance_homogeneity()
+```
+
+### Data Quality Analysis
+
+```python
+# Analyze data completeness
+completeness = analyzer.analyze_data_completeness()
+print(completeness)
+
+# Identify missing patterns
+missing_patterns = analyzer.identify_missing_patterns()
+print(missing_patterns)
+
+# Compute quality metrics
+quality = analyzer.compute_quality_metrics()
+print(quality)
+```
+
+## ⚙️ Configuration
+
+### Route Colors
+
+Customize route colors in `routes_df`:
+
+```python
+routes_df['color_hex'] = ['#FF6B6B', '#4ECDC4', '#95E1D3', ...]
+```
+
+### Analysis Parameters
+
+Adjust analysis parameters:
+
+```python
+# R³S² calculation with custom window
+rrs_scores = analyzer.calculate_rrs(days_rolling=10)
+
+# Forecast with custom horizon
+viz.plot_forecast('VJRQ+2M|RMJJ+F4', hours_ahead=48)
+
+# Outlier detection with custom threshold
+outliers = viz.generate_outlier_summary(top_n=50)
+```
+
+### Visualization Settings
+
+Customize plot appearance:
+
+```python
+import matplotlib.pyplot as plt
+
+# Set default figure size
+plt.rcParams['figure.figsize'] = (14, 8)
+
+# Set default DPI
+plt.rcParams['figure.dpi'] = 300
+
+# Set style
+plt.style.use('seaborn-v0_8-darkgrid')
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Browser automation fails:**
+- Ensure Chrome is installed and up to date
+- Check internet connection
+- Verify Google Maps is accessible
+
+**Import errors:**
+- Run `uv sync` to reinstall dependencies
+- Check Python version (3.8+ required)
+
+**Missing data:**
+- Verify CSV files exist and are not empty
+- Check file permissions
+- Ensure data collection script ran successfully
+
+**Visualization errors:**
+- Ensure temporal features are computed: `df = compute_temporal_features(df)`
+- Check that routes_df has required columns: `route_code`, `label_short`, `label_full`, `color_hex`
+- Verify data has sufficient observations (at least 2 weeks for decomposition)
+
+### Getting Help
+
+- Check the comprehensive examples: `traffic_analysis_examples.ipynb`
+- Review the detailed documentation: `TRAFFIC_ANALYSIS_README.md`
+- Run tests to verify installation: `uv run pytest tests/`
+
+## 📚 Documentation
+
+- **TRAFFIC_ANALYSIS_README.md** - Comprehensive analysis guide
+- **traffic_analysis_examples.ipynb** - Interactive examples notebook
+- **traffic_visual.ipynb** - Main analysis notebook
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+uv run pytest tests/
+
+# Run specific test file
+uv run pytest tests/test_traffic_analyzer.py -v
+
+# Run with coverage
+uv run pytest tests/ --cov=. --cov-report=html
+```
+
+## 📊 Project Structure
+
+```
+blr-traffic-monitor/
+├── traffic_snapshot.py          # Data collection script
+├── traffic_analyzer.py          # Statistical analysis engine
+├── visualization_engine.py      # Visualization and dashboard engine
+├── data_utils.py               # Data preprocessing utilities
+├── traffic_visual.ipynb        # Main analysis notebook
+├── traffic_analysis_examples.ipynb  # Comprehensive examples
+├── tests/                      # Test suite
+│   ├── test_traffic_analyzer.py
+│   ├── test_visualization_engine.py
+│   └── test_data_utils.py
+├── csv-bangalore_traffic.csv   # Traffic data
+├── csv-routes.csv             # Route definitions
+└── README.md                  # This file
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+See LICENSE.md for details.
+
+## 🙏 Acknowledgments
+
+- Google Maps for traffic data
+- Selenium for web automation
+- The open-source Python data science community
+
+---
+
+**Made with ❤️ for Bangalore commuters**
