@@ -29,7 +29,6 @@ jobs:
         with:
           version: latest
           enable-cache: true
-          # Optional: tie cache to your lockfile
           cache-dependency-glob: |
             **/uv.lock
             **/pyproject.toml
@@ -37,25 +36,9 @@ jobs:
       - name: Install dependencies (using uv)
         run: uv sync
 
-      - name: Decide whether to run daily dedup window
-        id: dedup_window
-        run: |
-          now_ist="$(TZ=Asia/Kolkata date +%H:%M)"
-          hour_ist="$(TZ=Asia/Kolkata date +%H)"
-          minute_ist="$(TZ=Asia/Kolkata date +%M)"
-          should_run=false
-          if { [ "$hour_ist" = "01" ] || [ "$hour_ist" = "13" ]; } && [ "$minute_ist" -ge 10 ] && [ "$minute_ist" -le 25 ]; then
-            should_run=true
-          fi
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            should_run=true
-          fi
-          echo "now_ist=$now_ist"
-          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
-
-      - name: Daily deduplication (cycle-aware)
+      - name: Daily deduplication
         id: dedup
-        if: steps.dedup_window.outputs.should_run == 'true'
+        if: ${{ inputs.job_type == 'dedup' }}
         run: |
           dedup_output="$(.venv/bin/python fix_timestamps.py --apply)"
           echo "$dedup_output"
@@ -67,6 +50,7 @@ jobs:
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
+        if: ${{ inputs.job_type == 'snapshot' }}
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
@@ -79,7 +63,7 @@ jobs:
       - name: Compose commit message
         id: commit_message
         run: |
-          if [ "${{ steps.dedup_window.outputs.should_run }}" = "true" ]; then
+          if [ "${{ inputs.job_type }}" = "dedup" ]; then
             removed="${{ steps.dedup.outputs.removed }}"
             echo "message=$removed records removed" >> "$GITHUB_OUTPUT"
           else
@@ -91,7 +75,6 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
 
-          # Rebase first to reduce race-related commit/push failures.
           git pull --rebase origin main || true
 
           git add csv-bangalore_traffic.csv || true
