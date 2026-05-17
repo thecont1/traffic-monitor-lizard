@@ -1,6 +1,16 @@
 name: Bangalore Traffic Snapshot
+
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      job_type:
+        description: "Which job to run"
+        required: true
+        default: "snapshot"
+        type: choice
+        options:
+          - snapshot
+          - dedup
 
 concurrency:
   group: traffic-snapshot
