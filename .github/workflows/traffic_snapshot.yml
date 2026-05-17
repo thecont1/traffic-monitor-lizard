@@ -1,8 +1,5 @@
 name: Bangalore Traffic Snapshot
 on:
-  schedule:
-    - cron: "10 * * * *"   # UTC :10 (= IST :40)
-    - cron: "40 * * * *"   # UTC :40 (= IST next-hour :10)
   workflow_dispatch: {}
 
 concurrency:
