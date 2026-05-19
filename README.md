@@ -95,7 +95,7 @@ uv run jupyter notebook traffic_analysis_examples.ipynb
 
 The system generates:
 - `csv-bangalore_traffic.csv` - All collected traffic data
-- `csv-routes.csv` - Route definitions and metadata
+- `csv-routes-bangalore.csv` - Route definitions and metadata
 - Various visualization plots and reports
 
 ## 📊 Data Collection
@@ -144,7 +144,7 @@ import pandas as pd
 
 # Load data
 df = pd.read_csv('csv-bangalore_traffic.csv')
-routes_df = pd.read_csv('csv-routes.csv')
+routes_df = pd.read_csv('csv-routes-bangalore.csv')
 
 # Preprocess and add temporal features
 df = preprocess_traffic_data(df)
@@ -467,7 +467,7 @@ blr-traffic-monitor/
 │   ├── test_visualization_engine.py
 │   └── test_data_utils.py
 ├── csv-bangalore_traffic.csv   # Traffic data
-├── csv-routes.csv             # Route definitions
+├── csv-routes-bangalore.csv             # Route definitions
 └── README.md                  # This file
 ```
 

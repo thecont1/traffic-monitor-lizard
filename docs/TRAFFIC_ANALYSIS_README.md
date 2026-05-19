@@ -34,7 +34,7 @@ from data_utils import compute_temporal_features
 
 # Load your data
 df = pd.read_csv('csv-bangalore_traffic.csv')
-routes_df = pd.read_csv('csv-routes.csv')
+routes_df = pd.read_csv('csv-routes-bangalore.csv')
 
 # Prepare data (add temporal features)
 df = compute_temporal_features(df)
