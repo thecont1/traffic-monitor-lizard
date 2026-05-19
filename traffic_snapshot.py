@@ -39,7 +39,7 @@ except ValueError as exc:
         f"Filename: {locations_data}"
     ) from exc
 locations_df = pd.read_csv(locations_data)
-routes_df = pd.read_csv("csv-routes.csv")
+routes_df = pd.read_csv("csv-routes-bangalore.csv")
 out_file = "csv-bangalore_traffic"
 tf = TimezoneFinder()
 
