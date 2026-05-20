@@ -84,7 +84,7 @@ jobs:
 
           git pull --rebase origin main || true
 
-          git add csv-bangalore_traffic.csv weather_snapshot.csv weather.md || true
+          git add csv-bangalore_traffic.csv csv-weather-snapshot.csv || true
 
           if git diff --cached --quiet; then
             echo "No changes"

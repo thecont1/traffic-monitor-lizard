@@ -4,15 +4,13 @@ import csv
 import json
 import re
 import sys
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
 
 CSV_PATH = Path(__file__).parent / "csv-routes-bangalore.csv"
-WEATHER_MD_PATH = Path(__file__).parent / "weather.md"
-WEATHER_CSV_PATH = Path(__file__).parent / "weather_snapshot.csv"
+WEATHER_CSV_PATH = Path(__file__).parent / "csv-weather-snapshot.csv"
 
 HEADERS = {
     "User-Agent": (
@@ -200,10 +198,6 @@ def read_stations() -> list[dict]:
     return stations
 
 
-def _val(v: str | None, suffix: str = "") -> str:
-    return f"{v}{suffix}" if v else "—"
-
-
 CSV_FIELDS = [
     "route_code", "aqi", "aqi_category", "condition",
     "temp_c", "realfeel_c", "realfeel_word", "humidity_pct", "wind_gust_kmh", "uv_index",
@@ -233,10 +227,7 @@ def write_csv(rows: list[dict], output_path: Path) -> None:
             })
 
 
-def fetch_all_and_write(output_path: Path) -> None:
-    ist = timezone(timedelta(hours=5, minutes=30))
-    now = datetime.now(ist).strftime("%d %b %Y, %H:%M IST")
-
+def fetch_all_and_write() -> None:
     stations = read_stations()
     print(f"Fetching weather for {len(stations)} stations…", file=sys.stderr)
 
@@ -270,55 +261,19 @@ def fetch_all_and_write(output_path: Path) -> None:
         print(f"weather={'ok' if not data['error'] else data['error']} aqi={aqi_data['aqi_value']}", file=sys.stderr)
         rows.append({**s, **data})
 
-    lines = [
-        f"# Bangalore Weather Snapshot",
-        f"",
-        f"*Fetched: {now}*",
-        f"",
-        f"| Station | Route | AQI | AQI Category | Condition | Temp | RealFeel | Feel | Humidity | Wind (km/h) | UV Index |",
-        f"|---------|-------|-----|--------------|-----------|------|----------|------|----------|----|----------|",
-    ]
-    for r in rows:
-        station_link = f"[{r['station']}]({build_url(r['station'])})"
-        if r.get("error"):
-            lines.append(
-                f"| {station_link} | {r['label']} | {_val(r['aqi_value'])} | {_val(r['aqi_category'])} | ⚠ {r['error']} | — | — | — | — | — | — |"
-            )
-        else:
-            lines.append(
-                f"| {station_link} | {r['label']} "
-                f"| {_val(r['aqi_value'])} "
-                f"| {_val(r['aqi_category'])} "
-                f"| {_val(r['status'])} "
-                f"| {_val(r['temp'])} "
-                f"| {_val(r['realfeel_temp'])} "
-                f"| {_val(r['realfeel_word'])} "
-                f"| {_val(r['humidity'])} "
-                f"| {_val(r['wind'])} "
-                f"| {_val(r['uv_index'])} |"
-            )
-
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Wrote {output_path}", file=sys.stderr)
-
     write_csv(rows, WEATHER_CSV_PATH)
     print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fetch AccuWeather data for all Bangalore route stations and write to weather.md"
+        description="Fetch AccuWeather data for all Bangalore route stations and write to csv-weather-snapshot.csv"
     )
     parser.add_argument(
         "location",
         nargs="?",
         help="Single AccuWeather station as name/id (e.g. 'jogupalya/3352209'). "
-             "If omitted, fetches all stations from the CSV and writes weather.md.",
-    )
-    parser.add_argument(
-        "--output",
-        default=str(WEATHER_MD_PATH),
-        help="Output Markdown file path (default: weather.md next to this script)",
+             "If omitted, fetches all stations from the CSV.",
     )
     args = parser.parse_args()
 
@@ -334,7 +289,7 @@ def main():
             sys.exit(1)
         print(json.dumps(result, indent=2))
     else:
-        fetch_all_and_write(Path(args.output))
+        fetch_all_and_write()
 
 
 if __name__ == "__main__":
