@@ -37,5 +37,6 @@ venv.bak/
 .env
 config.js
 WARP.md
-
 .vscode/
+
+weather.md

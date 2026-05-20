@@ -34,7 +34,7 @@ jobs:
             **/pyproject.toml
 
       - name: Install dependencies (using uv)
-        run: uv sync
+        run: uv sync --no-group analysis --no-group notebook --no-group test
 
       - name: Daily deduplication
         id: dedup
