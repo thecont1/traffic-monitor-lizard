@@ -1,14 +1,14 @@
-route_code,label_full,label_short,map_link,weather_lat,weather_long
-XJG4+7J|5PX4+HQ,"MG Road Metro Station → Kempegowda International Airport, Bengaluru",Airport Expy,https://maps.app.goo.gl/iUPz7pk68QMamXKt5,12.982689,77.6080751
-XHJ7+MG|WJM6+VC,Lulu Mall Bengaluru → Nexus Mall Koramangala,Central Diagonal 1,https://maps.app.goo.gl/hoiPUWNRGKZJKaN37,12.993217,77.5579031
-WHR9+R6|XJGF+6J,"Big Bull Temple, Basavanagudi → Shri Someshwara Swamy Temple, Halasuru",Central Diagonal 2,https://maps.app.goo.gl/1HeQ8vLQ57JuPd5m7,12.944441,77.5810031
-WH5F+26|WJ8X+F5W,"Jaya Prakash Nagar Metro Station → Hemavathi Park, HSR Layout",Double Decker Flyover,https://maps.app.goo.gl/RF4wEHDbbC1wRcVcA,12.916931,77.6088971
-XJPW+92|WJP4+FF,"Swami Vivekananda Road Metro Station → Christ University, Hosur Main Road",East Inner Ring,https://maps.app.goo.gl/sQtVA8KiYCFtdgsq5,12.933756,77.6258251
-XMW9+G8|WMJR+V4,"Benniganahalli Metro Station → Embassy TechVillage, Devarabisanahalli",East Outer Ring,https://maps.app.goo.gl/RK7j3NgiCqvu8jfX7,12.955103,77.6965071
-VJRQ+2M|RMJJ+F4,Kudlu Gate Metro Station → Biocon Campus,Hosur Road,https://maps.app.goo.gl/xrqtMpYo6dabGDNL8,12.833101,77.6731821
-WGG8+G5|XH7P+G6,"The Watering Hole, Rajarajeshwari Nagar → Sir Puttanna Chetty Town Hall, Bangalore",Mysore Road,https://maps.app.goo.gl/RMqKTa65pVX2nrbQA,12.918637,77.5054671
-2HM2+P8|XJV5+RG,"Jaya Prakash Narayana Park → Coles Park, Fraser Town",North Inner Ring,https://maps.app.goo.gl/9fWTiECTyaPgMFku8,13.031518,77.5309861
-2HVW+G8|XJXR+WG,"Bethel AG Church, Hebbal → SMVT Railway Station",North Outer Ring,https://maps.app.goo.gl/wymRJBiPUm9u7ZpB9,13.048370,77.6255341
-XPC7+72|XM33+J3,"The Rameshwaram Cafe @ Brookfield → Gawky Goose, Wind Tunnel Rd",Old Airport Road,https://maps.app.goo.gl/LAcuezM8uyXp9Ape6,12.967420,77.7178511
-WP44+W8|WJFH+XQ,"Karmelaram Railway Station, Chikkabellandur → St. Francis College, Koramangala",Sarjapur Road,https://maps.app.goo.gl/nsU7uPBHXVLgLzFY7,12.900225,77.6974511
-WHCJ+26|XGCP+FV,"RV Road Metro Station, Jayanagar 5th Block → Vijayanagar Metro Station, Chord Road",South Outer Ring,https://maps.app.goo.gl/JDQBtsBkEFKEbi3f9,12.936787,77.5560791
+route_code,label_full,label_short,map_link,weather_lat,weather_long,accuweather_station
+XJG4+7J|5PX4+HQ,"MG Road Metro Station → Kempegowda International Airport, Bengaluru",Airport Expy,https://maps.app.goo.gl/iUPz7pk68QMamXKt5,12.982689,77.6080751,shantala-nagar/3352203
+XHJ7+MG|WJM6+VC,Lulu Mall Bengaluru → Nexus Mall Koramangala,Central Diagonal 1,https://maps.app.goo.gl/hoiPUWNRGKZJKaN37,12.993217,77.5579031,rajajinagar/2850081
+WHR9+R6|XJGF+6J,"Big Bull Temple, Basavanagudi → Shri Someshwara Swamy Temple, Halasuru",Central Diagonal 2,https://maps.app.goo.gl/1HeQ8vLQ57JuPd5m7,12.944441,77.5810031,basavanagudi/3352257
+WH5F+26|WJ8X+F5W,"Jaya Prakash Nagar Metro Station → Hemavathi Park, HSR Layout",Double Decker Flyover,https://maps.app.goo.gl/RF4wEHDbbC1wRcVcA,12.916931,77.6088971,pattabhiram-nagar/3352276
+XJPW+92|WJP4+FF,"Swami Vivekananda Road Metro Station → Christ University, Hosur Main Road",East Inner Ring,https://maps.app.goo.gl/sQtVA8KiYCFtdgsq5,12.933756,77.6258251,new-tippasandara/3352192
+XMW9+G8|WMJR+V4,"Benniganahalli Metro Station → Embassy TechVillage, Devarabisanahalli",East Outer Ring,https://maps.app.goo.gl/RK7j3NgiCqvu8jfX7,12.955103,77.6965071,krishnarajapura/3350642
+VJRQ+2M|RMJJ+F4,Kudlu Gate Metro Station → Biocon Campus,Hosur Road,https://maps.app.goo.gl/xrqtMpYo6dabGDNL8,12.833101,77.6731821,bommanahalli/2865467
+WGG8+G5|XH7P+G6,"The Watering Hole, Rajarajeshwari Nagar → Sir Puttanna Chetty Town Hall, Bangalore",Mysore Road,https://maps.app.goo.gl/RMqKTa65pVX2nrbQA,12.918637,77.5054671,deepanjali-nagar/3352240
+2HM2+P8|XJV5+RG,"Jaya Prakash Narayana Park → Coles Park, Fraser Town",North Inner Ring,https://maps.app.goo.gl/9fWTiECTyaPgMFku8,13.031518,77.5309861,hmt-ward/3352145
+2HVW+G8|XJXR+WG,"Bethel AG Church, Hebbal → SMVT Railway Station",North Outer Ring,https://maps.app.goo.gl/wymRJBiPUm9u7ZpB9,13.048370,77.6255341,hebbal/2868866
+XPC7+72|XM33+J3,"The Rameshwaram Cafe @ Brookfield → Gawky Goose, Wind Tunnel Rd",Old Airport Road,https://maps.app.goo.gl/LAcuezM8uyXp9Ape6,12.967420,77.7178511,thubarahalli/2865004
+WP44+W8|WJFH+XQ,"Karmelaram Railway Station, Chikkabellandur → St. Francis College, Koramangala",Sarjapur Road,https://maps.app.goo.gl/nsU7uPBHXVLgLzFY7,12.900225,77.6974511,doddakannalli/2865544
+WHCJ+26|XGCP+FV,"RV Road Metro Station, Jayanagar 5th Block → Vijayanagar Metro Station, Chord Road",South Outer Ring,https://maps.app.goo.gl/JDQBtsBkEFKEbi3f9,12.936787,77.5560791,jayanagar/3352254
