@@ -4,6 +4,7 @@ import csv
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -33,25 +34,47 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
+HEADERS_FOLLOWUP = {**HEADERS, "Sec-Fetch-Site": "same-origin", "Referer": "https://www.accuweather.com/"}
+
 _SESSION: requests.Session | None = None
 
 
 def _get_session() -> requests.Session:
-    """Return a shared session, primed with AccuWeather homepage to avoid 403 on AQI pages."""
+    """Return a shared session, primed with AccuWeather homepage to avoid 403 on follow-up pages."""
     global _SESSION
     if _SESSION is None:
         _SESSION = requests.Session()
         try:
             _SESSION.get("https://www.accuweather.com/", headers=HEADERS, timeout=20)
+            time.sleep(1)
         except requests.RequestException:
             pass
     return _SESSION
 
 
+def _get_with_retry(url: str, retries: int = 3, delay: float = 4.0) -> requests.Response:
+    """GET with retry on 403/5xx, using follow-up headers and exponential back-off."""
+    session = _get_session()
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        if attempt:
+            time.sleep(delay * attempt)
+        try:
+            resp = session.get(url, headers=HEADERS_FOLLOWUP, timeout=20)
+            if resp.status_code == 403 and attempt < retries - 1:
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.HTTPError as e:
+            last_exc = e
+        except requests.RequestException as e:
+            last_exc = e
+    raise last_exc
+
+
 def extract_aqi(url: str) -> dict:
     """Scrape AQI number and category from an AccuWeather air-quality-index page."""
-    resp = _get_session().get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
+    resp = _get_with_retry(url)
 
     soup = BeautifulSoup(resp.text, "html.parser")
     aqi_value = None
@@ -79,8 +102,7 @@ def extract_aqi(url: str) -> dict:
 
 
 def extract_current_weather(url: str) -> dict:
-    resp = _get_session().get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
+    resp = _get_with_retry(url)
 
     soup = BeautifulSoup(resp.text, "html.parser")
 

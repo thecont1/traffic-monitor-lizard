@@ -82,8 +82,11 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
 
-          git pull --rebase origin main || true
+          # Remove stale files from old workflow versions if present
+          git rm --cached --ignore-unmatch weather.md weather_snapshot.csv || true
+          rm -f weather.md weather_snapshot.csv
 
+          # Stage outputs before pulling to avoid "unstaged changes" rebase error
           git add csv-bangalore_traffic.csv csv-weather-snapshot.csv || true
 
           if git diff --cached --quiet; then
@@ -92,4 +95,7 @@ jobs:
           fi
 
           git commit -m "${{ steps.commit_message.outputs.message }}"
-          git push origin HEAD:main || (git pull --rebase origin main && git push origin HEAD:main) || true
+
+          # Pull with rebase; for data CSV conflicts always keep ours (appended rows)
+          git pull --rebase -X ours origin main || true
+          git push origin HEAD:main || (git pull --rebase -X ours origin main && git push origin HEAD:main)
