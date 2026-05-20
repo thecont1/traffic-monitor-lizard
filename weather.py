@@ -190,7 +190,7 @@ def build_url(station: str) -> str:
     if len(parts) != 2:
         raise ValueError(f"Expected 'name/id', got '{station}'")
     name, lid = parts
-    return f"https://www.accuweather.com/en/in/{name}/{lid}/current-weather/{lid}"
+    return f"https://www.accuweather.com/en/in/{name}/{lid}/current-weather/{lid}?unit=c"
 
 
 def build_aqi_url(station: str) -> str:
@@ -199,7 +199,7 @@ def build_aqi_url(station: str) -> str:
     if len(parts) != 2:
         raise ValueError(f"Expected 'name/id', got '{station}'")
     name, lid = parts
-    return f"https://www.accuweather.com/en/in/{name}/{lid}/air-quality-index/{lid}"
+    return f"https://www.accuweather.com/en/in/{name}/{lid}/air-quality-index/{lid}?unit=c"
 
 
 def read_stations() -> list[dict]:
