@@ -2,14 +2,11 @@
 
 ## Problem
 
-The workflow runs twice per hour for redundancy, but GitHub Actions can trigger late.
-When late runs cross the clock-hour boundary, naive "same-hour" deduplication can keep
-both points even though they belong to the same intended sampling window.
+The workflows run via cron-job.org at 3am daily (dedup) and twice/hour (snapshot). Late triggers can still occur due to CI congestion. When runs cross the clock-hour boundary, naive "same-hour" deduplication can keep both points even though they belong to the same intended sampling window.
 
 ## Goal
 
-Keep **exactly one reading per intended hourly collection cycle per route**, while still
-preserving redundancy when one run fails.
+Keep **exactly one reading per intended hourly collection cycle per route**, while still preserving redundancy when one run fails.
 
 ## Core Idea: Cycle Bucketing Instead of Clock-Hour Bucketing
 
@@ -31,9 +28,9 @@ When multiple readings exist in the same `(cycle_start_hour, route_code)` bucket
 using this priority:
 
 1. **Nearest to intended offsets** (`0` or `30` minutes from cycle start)
-2. **Later timestamp wins ties** (more recent sample)
+2. **Earlier timestamp wins ties** (first sample in the cycle)
 
-Score used in code: `(distance_to_target, -timestamp)` (lower is better).
+Score used in code: `(distance_to_target, timestamp)` (lower is better).
 
 ## Implementation
 
@@ -83,7 +80,7 @@ python fix_timestamps.py --apply
 2026-02-04,00:43,ROUTE_A,26,10.1
 ```
 
-**Action**: Keep whichever is closer to offsets `0` or `30`; tie → later timestamp.
+**Action**: Keep whichever is closer to offsets `0` or `30`; tie → earlier timestamp.
 
 ### Case 3: Delayed Backup Run Crossing Hour
 
@@ -98,11 +95,25 @@ Both are in the same cycle (`00:10` to `01:09`).
 
 ## GitHub Actions Integration
 
-Workflow step remains:
+Workflow triggered exclusively by cron-job.org via Cloudflare worker:
+
+Two cron jobs configured at cron-job.org:
+- "TraffiCOracle BLR Dedup" - runs at 3am daily, hits `https://worker.dev?type=dedup`
+- "TraffiCOracle BLR Snapshot" - runs twice/hour, hits `https://worker.dev?type=snapshot`
+
+Worker validates `X-Cron-Secret` header and dispatches the workflow with `inputs.job_type`.
 
 ```yaml
-- name: Smart deduplication (keep one reading per hour)
-  run: .venv/bin/python fix_timestamps.py --apply
+on:
+  workflow_dispatch:
+    inputs:
+      job_type:
+        description: "Which job to run (snapshot or dedup)"
+        default: "snapshot"
+        type: choice
+        options:
+          - snapshot
+          - dedup
 ```
 
 ## Monitoring Output
@@ -117,7 +128,7 @@ The script logs:
 Example format:
 
 ```
-cycle 2026-02-04 00:10 ROUTE_A -> kept 01:02 from ['00:10', '01:02']
+cycle 2026-02-04 00:10 ROUTE_A -> kept 00:10 from ['00:10', '00:43']
 ```
 
 ## Tuning if schedule changes
