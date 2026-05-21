@@ -1,6 +1,8 @@
 name: Bangalore Traffic Snapshot
 
 on:
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       job_type:
@@ -50,7 +52,11 @@ jobs:
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
-        if: ${{ inputs.job_type == 'snapshot' }}
+        if: >-
+          ${{
+            inputs.job_type == 'snapshot'
+            || inputs.job_type == ''
+          }}
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
@@ -61,7 +67,11 @@ jobs:
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
       - name: Run weather snapshot
-        if: ${{ inputs.job_type == 'snapshot' }}
+        if: >-
+          ${{
+            inputs.job_type == 'snapshot'
+            || inputs.job_type == ''
+          }}
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8

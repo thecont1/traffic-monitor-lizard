@@ -7,7 +7,7 @@ the next clock hour while still preserving one data point per intended cycle.
 
 Selection Strategy (in priority order):
 1. Prefer readings closer to intended cycle offsets (:10 or :40)
-2. If both equally close, prefer the later reading (more recent data)
+2. If tied, prefer the earlier reading
 3. Remove all other readings in that cycle
 
 Usage:
@@ -70,7 +70,7 @@ def select_best_reading(entries: list[tuple[int, datetime, datetime]]) -> int:
     
     Strategy:
     1. Prefer readings closest to intended cycle offsets (:10 or :40)
-    2. If tied, prefer later reading (more recent)
+    2. If tied, prefer earlier reading
     """
     if len(entries) == 1:
         return entries[0][0]
@@ -79,9 +79,9 @@ def select_best_reading(entries: list[tuple[int, datetime, datetime]]) -> int:
     scored_entries = []
     for idx, ts, cycle_start in entries:
         distance = cycle_distance_to_target(ts, cycle_start)
-        # Score: (distance_to_target, -timestamp)
-        # Lower distance is better; for ties keep the later reading.
-        scored_entries.append((distance, -ts.timestamp(), idx, ts.strftime("%H:%M")))
+        # Score: (distance_to_target, timestamp)
+        # Lower distance is better; for ties keep the earlier reading.
+        scored_entries.append((distance, ts.timestamp(), idx, ts.strftime("%H:%M")))
     
     # Sort by score (best first)
     scored_entries.sort()
