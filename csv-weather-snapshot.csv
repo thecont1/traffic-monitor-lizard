@@ -1,6 +1,6 @@
 route_code,aqi,aqi_category,condition,temp_c,realfeel_c,realfeel_word,humidity_pct,wind_gust_kmh,uv_index
 XJG4+7J|5PX4+HQ,83,Poor,Partly cloudy,24,24,Pleasant,79,38,
-XHJ7+MG|WJM6+VC,,,Some clouds,26,26,,79,38,
+XHJ7+MG|WJM6+VC,31,Fair,Some clouds,26,26,,79,38,
 WHR9+R6|XJGF+6J,84,Poor,Partly cloudy,24,24,Pleasant,80,37,
 WH5F+26|WJ8X+F5W,74,Poor,Partly cloudy,24,24,Pleasant,80,38,
 XJPW+92|WJP4+FF,82,Poor,Partly cloudy,24,24,Pleasant,79,38,
