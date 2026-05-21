@@ -1,12 +1,12 @@
 """
 fix_timestamps.py – Cycle-aware smart deduplication for traffic data.
 
-Ensures only one reading per cycle per route, where a cycle starts at HH:10
+Ensures only one reading per collection cycle per route, where a cycle starts at HH:10
 and ends at (HH+1):09. This captures delayed HH:40 backup runs that spill into
-the next clock hour while still preserving one data point per intended hour.
+the next clock hour while still preserving one data point per intended cycle.
 
 Selection Strategy (in priority order):
-1. Prefer readings closer to intended cycle offsets (0 or 30 minutes)
+1. Prefer readings closer to intended cycle offsets (:10 or :40)
 2. If both equally close, prefer the later reading (more recent data)
 3. Remove all other readings in that cycle
 
@@ -23,7 +23,7 @@ from pathlib import Path
 
 CSV_PATH = Path(__file__).parent / "csv-bangalore_traffic.csv"
 CYCLE_START_MINUTE = 10
-TARGET_OFFSETS = [0, 30]  # :10 and :40 within a cycle starting at :10
+TARGET_OFFSETS = [0, 30]  # Minutes 10 and 40 within a cycle starting at :10
 
 
 def load_data(path: Path) -> list[dict]:
