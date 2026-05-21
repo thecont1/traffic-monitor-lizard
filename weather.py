@@ -239,6 +239,13 @@ CSV_FIELDS = [
     "temp_c", "realfeel_c", "realfeel_word", "humidity_pct", "wind_gust_kmh", "uv_index",
 ]
 
+# Column order for snapshot CSV (used by --json flag)
+SNAPSHOT_FIELDS = [
+    "route_code", "route_name_short", "temp", "realfeel_temp",
+    "realfeel_status", "humidity", "rsi_flag", "rsi_forecast",
+    "aqi_score", "aqi_flag"
+]
+
 
 def _csv_val(v: Optional[str]) -> str:
     return v if v is not None else ""
@@ -261,6 +268,15 @@ def write_csv(rows: list, output_path: Path) -> None:
                 "wind_gust_kmh": _csv_val(r.get("wind")),
                 "uv_index": _csv_val(r.get("uv_index")),
             })
+
+
+def write_snapshot_csv(rows: list, output_path: Path) -> None:
+    """Write weather snapshot CSV with specific column order for DB import."""
+    with open(output_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=SNAPSHOT_FIELDS, lineterminator="\n")
+        writer.writeheader()
+        for r in rows:
+            writer.writerow({k: _csv_val(r.get(k)) for k in SNAPSHOT_FIELDS})
 
 
 def fetch_all_and_write() -> None:
@@ -372,6 +388,9 @@ def main() -> None:
 
     if args.json:
         print(json.dumps(rows, indent=2))
+        # Also write snapshot CSV with correct column order
+        write_snapshot_csv(rows, WEATHER_CSV_PATH)
+        print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
     else:
         print()
         print_table(rows)

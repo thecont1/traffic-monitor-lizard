@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import os, time, re, urllib.parse
 import glob
+import csv
 from datetime import datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
@@ -251,8 +252,9 @@ def main():
     df["duration"] = df["duration"].astype(int)
 
     # Output CSV rows to stdout (without header) for workflow to capture
+    # Include weather fields (temp, realfeel_temp, humidity, rsi_flag, aqi_score) to be filled later
     for _, row in df.iterrows():
-        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']}")
+        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},,,,")
 
     # Prepare transformed data for commit message (find slowest route)
     df_traffic = df.copy()
