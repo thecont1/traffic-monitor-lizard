@@ -382,11 +382,8 @@ def main() -> None:
     # Preserve original station order
     rows = [rows_map[s["route_code"]] for s in stations if s["route_code"] in rows_map]
 
-    if any(r.get("route_code") for r in rows):
-        write_snapshot_csv(rows, WEATHER_CSV_PATH)
-        print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
-    else:
-        print("All station fetches failed — preserving existing snapshot", file=sys.stderr)
+    write_snapshot_csv(rows, WEATHER_CSV_PATH)
+    print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
 
     if args.json:
         print(json.dumps(rows, indent=2))
