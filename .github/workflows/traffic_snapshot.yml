@@ -45,7 +45,6 @@ jobs:
 
       - name: Run weather snapshot
         if: >-
-          >-
           ${{
             inputs.job_type == 'snapshot'
             || inputs.job_type == ''

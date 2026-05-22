@@ -16,7 +16,7 @@ WEATHER_CSV_PATH = DATA_DIR / "csv-weather-snapshot.csv"
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "Mozilla/5.0 (X11; Linux x86_64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/137.0.0.0 Safari/537.36"
     ),
@@ -27,7 +27,7 @@ HEADERS = {
     "Pragma": "no-cache",
     "Sec-Ch-Ua": '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
     "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"macOS"',
+    "Sec-Ch-Ua-Platform": '"Linux"',
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "none",
@@ -284,36 +284,6 @@ def write_snapshot_csv(rows: list, output_path: Path) -> None:
             writer.writerow({k: _csv_val(r.get(k)) for k in SNAPSHOT_FIELDS})
 
 
-def fetch_all_and_write() -> None:
-    stations = read_stations()
-    print(f"Fetching weather for {len(stations)} stations…", file=sys.stderr)
-
-    _get_session()  # prime session once before any AQI fetches
-
-    rows = []
-    for s in stations:
-        minute_url = build_minutecast_url(s["station"])
-        aqi_url = build_aqi_url(s["station"])
-        print(f"  {s['station']} … ", end="", file=sys.stderr)
-        try:
-            data = extract_minute_weather(minute_url)
-        except requests.HTTPError as e:
-            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast"]}
-        except requests.RequestException as e:
-            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast"]}
-
-        try:
-            aqi_data = extract_aqi(aqi_url)
-        except requests.RequestException:
-            aqi_data = {"aqi_score": None, "aqi_flag": None}
-
-        data.update(aqi_data)
-        print(f"weather={'ok'} aqi={aqi_data['aqi_score']}", file=sys.stderr)
-        rows.append({**s, **data})
-
-    write_csv(rows, WEATHER_CSV_PATH)
-    print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
-
 
 def print_table(rows: list) -> None:
     """Print weather data as a neat table."""
@@ -355,7 +325,7 @@ def print_table(rows: list) -> None:
 
 
 def main() -> None:
-    """Fetch weather for all stations and print a table."""
+    """Fetch weather for all stations, write snapshot CSV, and print a table or JSON."""
     import argparse
     parser = argparse.ArgumentParser(description="Fetch AccuWeather data for Bangalore route stations.")
     parser.add_argument("--json", action="store_true", help="Output as JSON instead of table")
@@ -378,24 +348,23 @@ def main() -> None:
             aqi_data = extract_aqi(aqi_url)
             data.update(current_data)
             data.update(aqi_data)
-        except requests.HTTPError as e:
+        except requests.HTTPError:
             data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
                                        "realfeel_status", "humidity", "aqi_score", "aqi_flag"]}
-        except requests.RequestException as e:
+        except requests.RequestException:
             data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
                                        "realfeel_status", "humidity", "aqi_score", "aqi_flag"]}
 
-        # Add station info with renamed fields
         data["route_code"] = s.get("route_code", "")
         data["route_name_short"] = s.get("label", s["station"])
         print("ok", file=sys.stderr)
         rows.append(data)
 
+    write_snapshot_csv(rows, WEATHER_CSV_PATH)
+    print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
+
     if args.json:
         print(json.dumps(rows, indent=2))
-        # Also write snapshot CSV with correct column order
-        write_snapshot_csv(rows, WEATHER_CSV_PATH)
-        print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
     else:
         print()
         print_table(rows)
