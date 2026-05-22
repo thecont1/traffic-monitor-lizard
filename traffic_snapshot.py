@@ -42,7 +42,7 @@ except ValueError as exc:
     ) from exc
 locations_df = pd.read_csv(locations_data)
 routes_df = pd.read_csv("csv-routes-bangalore.csv")
-out_file = "csv-bangalore_traffic"
+out_file = "csv-traffic-bangalore"
 tf = TimezoneFinder()
 WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]
 

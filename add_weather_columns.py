@@ -5,7 +5,7 @@ Add weather columns to the traffic CSV if they don't exist.
 import csv
 from pathlib import Path
 
-TRAFFIC_CSV = Path(__file__).parent / "csv-bangalore_traffic.csv"
+TRAFFIC_CSV = Path(__file__).parent / "csv-traffic-bangalore.csv"
 WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]
 
 

@@ -63,7 +63,7 @@ jobs:
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
           uv run traffic_snapshot.py > /tmp/snapshot_output.txt
-          head -n -1 /tmp/snapshot_output.txt >> csv-bangalore_traffic.csv
+          head -n -1 /tmp/snapshot_output.txt >> csv-traffic-bangalore.csv
           message="$(tail -n 1 /tmp/snapshot_output.txt)"
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
@@ -88,7 +88,7 @@ jobs:
           rm -f weather.md weather_snapshot.csv
 
           # Stage outputs before pulling to avoid "unstaged changes" rebase error
-          git add csv-bangalore_traffic.csv csv-weather-snapshot.csv || true
+          git add csv-traffic-bangalore.csv csv-weather-snapshot.csv || true
 
           if git diff --cached --quiet; then
             echo "No changes"

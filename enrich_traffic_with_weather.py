@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 
-TRAFFIC_CSV = Path(__file__).parent / "csv-bangalore_traffic.csv"
+TRAFFIC_CSV = Path(__file__).parent / "csv-traffic-bangalore.csv"
 WEATHER_CSV = Path(__file__).parent / "csv-weather-snapshot.csv"
 
 WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]

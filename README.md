@@ -94,7 +94,7 @@ uv run jupyter notebook traffic_analysis_examples.ipynb
 ### 3. View Results
 
 The system generates:
-- `csv-bangalore_traffic.csv` - All collected traffic data
+- `csv-traffic-bangalore.csv` - All collected traffic data
 - `csv-routes-bangalore.csv` - Route definitions and metadata
 - Various visualization plots and reports
 
@@ -105,7 +105,7 @@ The system generates:
 Collect data and append to CSV:
 
 ```bash
-uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
+uv run python traffic_snapshot.py >> csv-traffic-bangalore.csv
 ```
 
 ### Automated Collection
@@ -114,7 +114,7 @@ Set up a cron job for regular data collection:
 
 ```bash
 # Collect data every hour
-0 * * * * cd /path/to/blr-traffic-monitor && uv run python traffic_snapshot.py >> csv-bangalore_traffic.csv
+0 * * * * cd /path/to/blr-traffic-monitor && uv run python traffic_snapshot.py >> csv-traffic-bangalore.csv
 ```
 
 ### Route Configuration
@@ -143,7 +143,7 @@ from data_utils import preprocess_traffic_data, compute_temporal_features
 import pandas as pd
 
 # Load data
-df = pd.read_csv('csv-bangalore_traffic.csv')
+df = pd.read_csv('csv-traffic-bangalore.csv')
 routes_df = pd.read_csv('csv-routes-bangalore.csv')
 
 # Preprocess and add temporal features
@@ -466,7 +466,7 @@ blr-traffic-monitor/
 │   ├── test_traffic_analyzer.py
 │   ├── test_visualization_engine.py
 │   └── test_data_utils.py
-├── csv-bangalore_traffic.csv   # Traffic data
+├── csv-traffic-bangalore.csv   # Traffic data
 ├── csv-routes-bangalore.csv             # Route definitions
 └── README.md                  # This file
 ```
