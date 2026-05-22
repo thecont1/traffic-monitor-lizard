@@ -55,23 +55,28 @@ def _get_session() -> requests.Session:
     return _local.session
 
 
-def _get_with_retry(url: str, retries: int = 3, delay: float = 4.0) -> requests.Response:
+def _get_with_retry(url: str, retries: int = 4, delay: float = 3.0) -> requests.Response:
     """GET with retry on 403/5xx, using follow-up headers and exponential back-off."""
     session = _get_session()
     last_exc: Exception = requests.RequestException(f"No attempts made for {url}")
     for attempt in range(retries):
-        if attempt:
-            time.sleep(delay * attempt)
         try:
             resp = session.get(url, headers=HEADERS_FOLLOWUP, timeout=20)
-            if resp.status_code == 403 and attempt < retries - 1:
-                continue
+            if resp.status_code == 403:
+                if attempt < retries - 1:
+                    time.sleep(delay * (attempt + 1))
+                    continue
+                resp.raise_for_status()
             resp.raise_for_status()
             return resp
         except requests.HTTPError as e:
             last_exc = e
+            if attempt < retries - 1:
+                time.sleep(2)
         except requests.RequestException as e:
             last_exc = e
+            if attempt < retries - 1:
+                time.sleep(2)
     raise last_exc
 
 
