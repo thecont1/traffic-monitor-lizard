@@ -43,6 +43,15 @@ jobs:
           fi
           echo "removed=$removed" >> "$GITHUB_OUTPUT"
 
+      - name: Run weather snapshot
+        if: >-
+          >-
+          ${{
+            inputs.job_type == 'snapshot'
+            || inputs.job_type == ''
+          }}
+        run: uv run weather.py --json
+
       - name: Run traffic snapshot and append to CSV
         id: snapshot
         if: >-
@@ -58,24 +67,6 @@ jobs:
           message="$(tail -n 1 /tmp/snapshot_output.txt)"
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
-
-      - name: Run weather snapshot
-        if: >-
-          >-
-          ${{
-            inputs.job_type == 'snapshot'
-            || inputs.job_type == ''
-          }}
-        run: uv run weather.py --json
-
-      - name: Enrich traffic data with weather
-        if: >-
-          >-
-          ${{
-            inputs.job_type == 'snapshot'
-            || inputs.job_type == ''
-          }}
-        run: uv run enrich_traffic_with_weather.py
 
       - name: Compose commit message
         id: commit_message

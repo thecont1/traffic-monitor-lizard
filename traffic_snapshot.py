@@ -7,6 +7,7 @@ import csv
 from datetime import datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -43,6 +44,7 @@ locations_df = pd.read_csv(locations_data)
 routes_df = pd.read_csv("csv-routes-bangalore.csv")
 out_file = "csv-bangalore_traffic"
 tf = TimezoneFinder()
+WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]
 
 @lru_cache(maxsize=1)
 def get_reference_tz():
@@ -52,6 +54,18 @@ def get_reference_tz():
     if tz_name is None:
         tz_name = "Asia/Kolkata"
     return ZoneInfo(tz_name)
+
+
+def load_weather_by_route() -> dict:
+    """Load weather data keyed by route_code from csv-weather-snapshot.csv."""
+    weather_csv = Path("csv-weather-snapshot.csv")
+    if not weather_csv.exists():
+        print("No weather snapshot found, using empty values", file=sys.stderr)
+        return {}
+
+    with open(weather_csv, newline="") as f:
+        reader = csv.DictReader(f)
+        return {row["route_code"]: {k: row.get(k, "") for k in WEATHER_FIELDS} for row in reader}
 
 def get_reference_now():
     return datetime.now(get_reference_tz())
@@ -204,6 +218,9 @@ def transformed_data(df_in):
     return df_traffic
 
 def main():
+    # Load weather data into memory before scraping
+    weather_by_route = load_weather_by_route()
+    
     driver = create_driver(headless=True)
     df = pd.DataFrame()
     now_ref = get_reference_now()
@@ -252,9 +269,16 @@ def main():
     df["duration"] = df["duration"].astype(int)
 
     # Output CSV rows to stdout (without header) for workflow to capture
-    # Include weather fields (temp, realfeel_temp, humidity, rsi_flag, aqi_score) to be filled later
+    # Include weather fields (temp, realfeel_temp, humidity, rsi_flag, aqi_score) filled from weather data
     for _, row in df.iterrows():
-        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},,,,")
+        route_code = row["route_code"]
+        weather = weather_by_route.get(route_code, {})
+        temp = weather.get("temp", "")
+        realfeel_temp = weather.get("realfeel_temp", "")
+        humidity = weather.get("humidity", "")
+        rsi_flag = weather.get("rsi_flag", "")
+        aqi_score = weather.get("aqi_score", "")
+        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},{temp},{realfeel_temp},{humidity},{rsi_flag},{aqi_score}")
 
     # Prepare transformed data for commit message (find slowest route)
     df_traffic = df.copy()
