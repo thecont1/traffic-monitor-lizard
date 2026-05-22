@@ -18,7 +18,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from openlocationcode import openlocationcode as olc
 from timezonefinder import TimezoneFinder
 global locations_data, referenceLatitude, referenceLongitude
-LOCATION_GLOB = str(Path(__file__).parent.parent / "csv-locations*.csv")
+DATA_DIR = Path(__file__).parent.parent / "data"
+LOCATION_GLOB = str(DATA_DIR / "csv-locations*.csv")
 _location_matches = sorted(glob.glob(LOCATION_GLOB))
 if not _location_matches:
     raise FileNotFoundError(f"No location files found matching pattern: {LOCATION_GLOB}")
@@ -41,7 +42,7 @@ except ValueError as exc:
         f"Filename: {locations_data}"
     ) from exc
 locations_df = pd.read_csv(locations_data)
-routes_df = pd.read_csv(str(Path(__file__).parent.parent / "csv-routes-bangalore.csv"))
+routes_df = pd.read_csv(str(DATA_DIR / "csv-routes-bangalore.csv"))
 out_file = "csv-traffic-bangalore"
 tf = TimezoneFinder()
 WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]
@@ -58,7 +59,7 @@ def get_reference_tz():
 
 def load_weather_by_route() -> dict:
     """Load weather data keyed by route_code from csv-weather-snapshot.csv."""
-    weather_csv = Path(__file__).parent.parent / "csv-weather-snapshot.csv"
+    weather_csv = DATA_DIR / "csv-weather-snapshot.csv"
     if not weather_csv.exists():
         print("No weather snapshot found, using empty values", file=sys.stderr)
         return {}

@@ -10,8 +10,9 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-CSV_PATH = Path(__file__).parent.parent / "csv-routes-bangalore.csv"
-WEATHER_CSV_PATH = Path(__file__).parent.parent / "csv-weather-snapshot.csv"
+DATA_DIR = Path(__file__).parent.parent / "data"
+CSV_PATH = DATA_DIR / "csv-routes-bangalore.csv"
+WEATHER_CSV_PATH = DATA_DIR / "csv-weather-snapshot.csv"
 
 HEADERS = {
     "User-Agent": (
