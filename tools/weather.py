@@ -93,7 +93,8 @@ def extract_aqi(url: str) -> dict:
 
         data_el = card.select_one("h3.air-quality-data")
         if data_el:
-            aqi_category = data_el.get_text(" ", strip=True).split()[0]
+            tokens = data_el.get_text(" ", strip=True).split()
+            aqi_category = tokens[0] if tokens else None
 
     if not aqi_value:
         page_text = soup.get_text(" ", strip=True)
