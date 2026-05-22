@@ -179,23 +179,27 @@ def extract_minute_weather(url: str) -> dict:
         if m:
             rsi_forecast = m.group(1)
 
-    # Look for weather phenomenon in .phrase elements
-    # There are many .phrase elements - find the first one with actual precipitation info
-    for phrase_el in soup.select(".phrase"):
-        phrase_text = phrase_el.get_text(strip=True)
-        if any(p in phrase_text.lower() for p in ["rain", "snow", "drizzle", "showers", "ice"]) and "No Precipitation" not in phrase_text:
-            rsi_flag = phrase_text
-            break
+    # Check for "No Precipitation" first - if present, clear any precipitation
+    if "no precipitation" in page_text.lower():
+        rsi_flag = "No Precipitation"
+    else:
+        # Look for weather phenomenon in .phrase elements
+        # There are many .phrase elements - find the first one with actual precipitation info
+        for phrase_el in soup.select(".phrase"):
+            phrase_text = phrase_el.get_text(strip=True)
+            if any(p in phrase_text.lower() for p in ["rain", "snow", "drizzle", "showers", "ice"]) and "No Precipitation" not in phrase_text:
+                rsi_flag = phrase_text
+                break
 
-    # Fallback: look for weather phenomenon in page text if not found in phrases
-    if not rsi_flag:
-        m = re.search(r"((?:Light\s+)|(?:Heavy\s+))?(Rain|Snow|Ice\s+Mix|Drizzle|Showers)", page_text, re.IGNORECASE)
-        if m:
-            if m.group(1):
-                rsi_flag = (m.group(1) + m.group(2)).strip()
-            else:
-                rsi_flag = m.group(2)
-            rsi_flag = rsi_flag[0].upper() + rsi_flag[1:]
+        # Fallback: look for weather phenomenon in page text if not found in phrases
+        if not rsi_flag:
+            m = re.search(r"((?:Light\s+)|(?:Heavy\s+))?(Rain|Snow|Ice\s+Mix|Drizzle|Showers)", page_text, re.IGNORECASE)
+            if m:
+                if m.group(1):
+                    rsi_flag = (m.group(1) + m.group(2)).strip()
+                else:
+                    rsi_flag = m.group(2)
+                rsi_flag = rsi_flag[0].upper() + rsi_flag[1:]
 
     # Look for "Periods of rain will continue for X min" pattern
     if not rsi_flag:
