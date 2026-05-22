@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import csv
 import json
+import random
 import re
 import sys
 import threading
@@ -336,6 +337,7 @@ def main() -> None:
     print(f"Fetching weather for {len(stations)} stations...", file=sys.stderr)
 
     def fetch_station(s: dict) -> dict:
+        time.sleep(random.uniform(0.5, 2.5))  # jitter to avoid simultaneous bursts
         minute_url = build_minutecast_url(s["station"])
         current_url = build_current_weather_url(s["station"])
         aqi_url = build_aqi_url(s["station"])
@@ -361,7 +363,7 @@ def main() -> None:
         return data
 
     rows_map: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {executor.submit(fetch_station, s): s for s in stations}
         for future in as_completed(futures):
             s = futures[future]
@@ -380,8 +382,11 @@ def main() -> None:
     # Preserve original station order
     rows = [rows_map[s["route_code"]] for s in stations if s["route_code"] in rows_map]
 
-    write_snapshot_csv(rows, WEATHER_CSV_PATH)
-    print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
+    if any(r.get("route_code") for r in rows):
+        write_snapshot_csv(rows, WEATHER_CSV_PATH)
+        print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
+    else:
+        print("All station fetches failed — preserving existing snapshot", file=sys.stderr)
 
     if args.json:
         print(json.dumps(rows, indent=2))
