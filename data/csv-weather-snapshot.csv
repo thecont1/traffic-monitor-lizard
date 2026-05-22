@@ -1,14 +1,14 @@
 route_code,route_name_short,temp,realfeel_temp,realfeel_status,humidity,rsi_flag,rsi_forecast,aqi_score,aqi_flag
-XJG4+7J|5PX4+HQ,Airport Expy,25,29,Very Warm,74,Rain,,52,Poor
-XHJ7+MG|WJM6+VC,Central Diagonal 1,28,30,Very Warm,69,Light Rain,Rain starting in 95 min,21,Fair
-WHR9+R6|XJGF+6J,Central Diagonal 2,25,29,Very Warm,74,Rain,,53,Poor
-WH5F+26|WJ8X+F5W,Double Decker Flyover,26,30,Very Warm,69,Rain,,52,Poor
-XJPW+92|WJP4+FF,East Inner Ring,26,30,Very Warm,68,Rain,,53,Poor
-XMW9+G8|WMJR+V4,East Outer Ring,25,29,Very Warm,75,Rain,,50,Poor
+XJG4+7J|5PX4+HQ,Airport Expy,26,29,Very Warm,68,Rain,,52,Poor
+XHJ7+MG|WJM6+VC,Central Diagonal 1,28,30,Very Warm,69,Rain,,21,Fair
+WHR9+R6|XJGF+6J,Central Diagonal 2,26,29,Very Warm,68,Rain,,53,Poor
+WH5F+26|WJ8X+F5W,Double Decker Flyover,,,,,,,,
+XJPW+92|WJP4+FF,East Inner Ring,27,30,,64,Rain,,53,Poor
+XMW9+G8|WMJR+V4,East Outer Ring,26,29,Very Warm,68,Rain,,50,Poor
 VJRQ+2M|RMJJ+F4,Hosur Road,26,30,Very Warm,68,Rain,,52,Poor
 WGG8+G5|XH7P+G6,Mysore Road,25,29,Very Warm,75,Rain,,48,Fair
-2HM2+P8|XJV5+RG,North Inner Ring,25,29,Very Warm,75,Rain,,52,Poor
-2HVW+G8|XJXR+WG,North Outer Ring,27,30,Very Warm,71,Rain,,14,Excellent
-XPC7+72|XM33+J3,Old Airport Road,27,31,Very Warm,67,Rain,,50,Poor
-WP44+W8|WJFH+XQ,Sarjapur Road,27,31,Very Warm,67,Rain,,44,Fair
-WHCJ+26|XGCP+FV,South Outer Ring,26,30,Very Warm,69,Rain,,52,Poor
+2HM2+P8|XJV5+RG,North Inner Ring,26,29,Pleasant,68,Rain,,52,Poor
+2HVW+G8|XJXR+WG,North Outer Ring,28,30,Very Warm,66,Rain,,14,Excellent
+XPC7+72|XM33+J3,Old Airport Road,,,,,,,,
+WP44+W8|WJFH+XQ,Sarjapur Road,28,31,Very Warm,62,Rain,,44,Fair
+WHCJ+26|XGCP+FV,South Outer Ring,27,30,Very Warm,69,Rain,,52,Poor
