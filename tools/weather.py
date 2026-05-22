@@ -84,25 +84,17 @@ def extract_aqi(url: str) -> dict:
     """Scrape AQI number and category from an AccuWeather air-quality-index page."""
     resp = _get_with_retry(url)
 
-    soup = BeautifulSoup(resp.text, "lxml")
+    page_text = BeautifulSoup(resp.text, "lxml").get_text(" ", strip=True)
     aqi_value = None
     aqi_category = None
 
-    card = soup.select_one(".air-quality-card")
-    if card:
-        num_el = card.select_one(".aq-number")
-        if num_el:
-            m = re.search(r"(\d+)", num_el.get_text(strip=True))
-            if m:
-                aqi_value = m.group(1)
-
-        data_el = card.select_one("h3.air-quality-data")
-        if data_el:
-            tokens = data_el.get_text(" ", strip=True).split()
-            aqi_category = tokens[0] if tokens else None
-
-    if not aqi_value:
-        page_text = soup.get_text(" ", strip=True)
+    # Matches patterns like "79 AQI Poor" or "79 AQI\nPoor"
+    m = re.search(r"(\d{1,3})\s*AQI\s+(Good|Fair|Moderate|Poor|Unhealthy|Very Unhealthy|Hazardous|Dangerous|Excellent)", page_text)
+    if m:
+        aqi_value = m.group(1)
+        aqi_category = m.group(2)
+    else:
+        # Fallback: at least grab the number
         m = re.search(r"(\d{1,3})\s*AQI", page_text)
         if m:
             aqi_value = m.group(1)
