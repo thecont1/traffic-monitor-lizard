@@ -3,7 +3,9 @@ import csv
 import json
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -37,26 +39,25 @@ HEADERS = {
 
 HEADERS_FOLLOWUP = {**HEADERS, "Sec-Fetch-Site": "same-origin", "Referer": "https://www.accuweather.com/"}
 
-_SESSION: Optional[requests.Session] = None
+_local = threading.local()
 
 
 def _get_session() -> requests.Session:
-    """Return a shared session, primed with AccuWeather homepage to avoid 403 on follow-up pages."""
-    global _SESSION
-    if _SESSION is None:
-        _SESSION = requests.Session()
+    """Return a thread-local session, primed with AccuWeather homepage to avoid 403 on follow-up pages."""
+    if not getattr(_local, "session", None):
+        _local.session = requests.Session()
         try:
-            _SESSION.get("https://www.accuweather.com/", headers=HEADERS, timeout=20)
+            _local.session.get("https://www.accuweather.com/", headers=HEADERS, timeout=20)
             time.sleep(1)
         except requests.RequestException:
             pass
-    return _SESSION
+    return _local.session
 
 
 def _get_with_retry(url: str, retries: int = 3, delay: float = 4.0) -> requests.Response:
     """GET with retry on 403/5xx, using follow-up headers and exponential back-off."""
     session = _get_session()
-    last_exc: Optional[Exception] = None
+    last_exc: Exception = requests.RequestException(f"No attempts made for {url}")
     for attempt in range(retries):
         if attempt:
             time.sleep(delay * attempt)
@@ -77,7 +78,7 @@ def extract_aqi(url: str) -> dict:
     """Scrape AQI number and category from an AccuWeather air-quality-index page."""
     resp = _get_with_retry(url)
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.text, "lxml")
     aqi_value = None
     aqi_category = None
 
@@ -123,7 +124,7 @@ def build_current_weather_url(station: str) -> str:
 def extract_current_weather(url: str) -> dict:
     """Extract RealFeel word and humidity from current-weather page."""
     resp = _get_with_retry(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.text, "lxml")
 
     realfeel_word = None
     humidity = None
@@ -148,7 +149,7 @@ def extract_current_weather(url: str) -> dict:
 def extract_minute_weather(url: str) -> dict:
     """Scrape temp, realfeel temp, weather phenomenon, and forecast from minute-weather-forecast page."""
     resp = _get_with_retry(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(resp.text, "lxml")
 
     temp = None
     realfeel_temp = None
@@ -334,14 +335,10 @@ def main() -> None:
     stations = read_stations()
     print(f"Fetching weather for {len(stations)} stations...", file=sys.stderr)
 
-    _get_session()  # prime session once
-
-    rows = []
-    for s in stations:
+    def fetch_station(s: dict) -> dict:
         minute_url = build_minutecast_url(s["station"])
         current_url = build_current_weather_url(s["station"])
         aqi_url = build_aqi_url(s["station"])
-        print(f"  {s['station']} ... ", end="", file=sys.stderr)
         try:
             data = extract_minute_weather(minute_url)
         except requests.RequestException:
@@ -361,8 +358,27 @@ def main() -> None:
 
         data["route_code"] = s.get("route_code", "")
         data["route_name_short"] = s.get("label", s["station"])
-        print("ok", file=sys.stderr)
-        rows.append(data)
+        return data
+
+    rows_map: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(fetch_station, s): s for s in stations}
+        for future in as_completed(futures):
+            s = futures[future]
+            try:
+                result = future.result()
+                rows_map[s["route_code"]] = result
+                print(f"  {s['station']} ok", file=sys.stderr)
+            except Exception as exc:
+                print(f"  {s['station']} FAILED: {exc}", file=sys.stderr)
+                rows_map[s["route_code"]] = {
+                    k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
+                                      "realfeel_status", "humidity", "aqi_score", "aqi_flag",
+                                      "route_code", "route_name_short"]
+                }
+
+    # Preserve original station order
+    rows = [rows_map[s["route_code"]] for s in stations if s["route_code"] in rows_map]
 
     write_snapshot_csv(rows, WEATHER_CSV_PATH)
     print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
