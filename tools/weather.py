@@ -179,9 +179,9 @@ def extract_minute_weather(url: str) -> dict:
         if m:
             rsi_forecast = m.group(1)
 
-    # Check for "No Precipitation" first - if present, clear any precipitation
+    # Check for "No Precipitation" first - if present, leave rsi_flag as None (blank in CSV)
     if "no precipitation" in page_text.lower():
-        rsi_flag = "No Precipitation"
+        rsi_flag = None
     else:
         # Look for weather phenomenon in .phrase elements
         # There are many .phrase elements - find the first one with actual precipitation info
@@ -344,16 +344,20 @@ def main() -> None:
         print(f"  {s['station']} ... ", end="", file=sys.stderr)
         try:
             data = extract_minute_weather(minute_url)
-            current_data = extract_current_weather(current_url)
-            aqi_data = extract_aqi(aqi_url)
-            data.update(current_data)
-            data.update(aqi_data)
-        except requests.HTTPError:
-            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
-                                       "realfeel_status", "humidity", "aqi_score", "aqi_flag"]}
         except requests.RequestException:
-            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
-                                       "realfeel_status", "humidity", "aqi_score", "aqi_flag"]}
+            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast"]}
+
+        try:
+            current_data = extract_current_weather(current_url)
+            data.update(current_data)
+        except requests.RequestException:
+            data.update({"realfeel_status": None, "humidity": None})
+
+        try:
+            aqi_data = extract_aqi(aqi_url)
+            data.update(aqi_data)
+        except requests.RequestException:
+            data.update({"aqi_score": None, "aqi_flag": None})
 
         data["route_code"] = s.get("route_code", "")
         data["route_name_short"] = s.get("label", s["station"])
