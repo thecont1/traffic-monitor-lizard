@@ -40,3 +40,8 @@ WARP.md
 .vscode/
 
 weather.md
+
+# AI tool directories
+.kiro/
+.kilo/
+.qoder/
