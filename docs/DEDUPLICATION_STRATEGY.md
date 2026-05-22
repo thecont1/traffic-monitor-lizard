@@ -34,16 +34,16 @@ Score used in code: `(distance_to_target, timestamp)` (lower is better).
 
 ## Implementation
 
-### Script: `fix_timestamps.py`
+### Script: `tools/fix_timestamps.py`
 
 **Usage:**
 
 ```bash
 # Preview changes (dry-run)
-python fix_timestamps.py
+python tools/fix_timestamps.py
 
 # Apply changes
-python fix_timestamps.py --apply
+python tools/fix_timestamps.py --apply
 ```
 
 ### Key Functions
@@ -133,7 +133,7 @@ cycle 2026-02-04 00:10 ROUTE_A -> kept 00:10 from ['00:10', '00:43']
 
 ## Tuning if schedule changes
 
-If collection times change, update these constants in `fix_timestamps.py`:
+If collection times change, update these constants in `tools/fix_timestamps.py`:
 
 ```python
 CYCLE_START_MINUTE = 10

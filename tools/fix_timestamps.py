@@ -21,7 +21,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-CSV_PATH = Path(__file__).parent / "csv-traffic-bangalore.csv"
+CSV_PATH = Path(__file__).parent.parent / "csv-traffic-bangalore.csv"
 CYCLE_START_MINUTE = 10
 TARGET_OFFSETS = [0, 30]  # Minutes 10 and 40 within a cycle starting at :10
 

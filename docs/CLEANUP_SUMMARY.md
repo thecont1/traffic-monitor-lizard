@@ -27,11 +27,12 @@ The following temporary and redundant files have been removed to keep the reposi
 ## Files Retained
 
 ### Core Implementation
-- ✅ `traffic_snapshot.py` - Data collection script
+- ✅ `tools/traffic_snapshot.py` - Data collection script
+- ✅ `tools/weather.py` - Weather data collection
+- ✅ `tools/fix_timestamps.py` - Data deduplication utility
 - ✅ `traffic_analyzer.py` - Statistical analysis engine (2,000+ lines)
 - ✅ `visualization_engine.py` - Visualization engine (3,500+ lines)
 - ✅ `data_utils.py` - Data preprocessing utilities (200+ lines)
-- ✅ `fix_timestamps.py` - Utility script
 
 ### Documentation
 - ✅ `README.md` - **UPDATED** with comprehensive usage instructions

@@ -68,7 +68,7 @@ A comprehensive system for monitoring, analyzing, and visualizing real-time traf
 Run the data collector to gather current traffic information:
 
 ```bash
-uv run python traffic_snapshot.py
+uv run python tools/traffic_snapshot.py
 ```
 
 The script will:
@@ -105,7 +105,7 @@ The system generates:
 Collect data and append to CSV:
 
 ```bash
-uv run python traffic_snapshot.py >> csv-traffic-bangalore.csv
+uv run python tools/traffic_snapshot.py >> csv-traffic-bangalore.csv
 ```
 
 ### Automated Collection
@@ -114,12 +114,12 @@ Set up a cron job for regular data collection:
 
 ```bash
 # Collect data every hour
-0 * * * * cd /path/to/blr-traffic-monitor && uv run python traffic_snapshot.py >> csv-traffic-bangalore.csv
+0 * * * * cd /path/to/blr-traffic-monitor && uv run python tools/traffic_snapshot.py >> csv-traffic-bangalore.csv
 ```
 
 ### Route Configuration
 
-Edit routes in `traffic_snapshot.py` or `traffic_visual.ipynb`:
+Edit routes in `tools/traffic_snapshot.py` or `traffic_visual.ipynb`:
 
 ```python
 routes_df = pd.DataFrame({
@@ -456,7 +456,10 @@ uv run pytest tests/ --cov=. --cov-report=html
 
 ```
 blr-traffic-monitor/
-├── traffic_snapshot.py          # Data collection script
+├── tools/
+│   ├── traffic_snapshot.py    # Data collection script
+│   ├── weather.py             # Weather data collection
+│   └── fix_timestamps.py      # Data deduplication utility
 ├── traffic_analyzer.py          # Statistical analysis engine
 ├── visualization_engine.py      # Visualization and dashboard engine
 ├── data_utils.py               # Data preprocessing utilities
