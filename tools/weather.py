@@ -246,7 +246,7 @@ CSV_FIELDS = [
 
 # Column order for snapshot CSV (used by --json flag)
 SNAPSHOT_FIELDS = [
-    "route_code", "route_name_short", "temp", "realfeel_temp",
+    "route_code", "route_name_short", "accuweather_station", "temp", "realfeel_temp",
     "realfeel_status", "humidity", "rsi_flag", "rsi_forecast",
     "aqi_score", "aqi_flag"
 ]
@@ -358,6 +358,7 @@ def main() -> None:
 
         data["route_code"] = s.get("route_code", "")
         data["route_name_short"] = s.get("label", s["station"])
+        data["accuweather_station"] = s["station"]
         return data
 
     rows_map: dict[str, dict] = {}
@@ -374,7 +375,7 @@ def main() -> None:
                 rows_map[s["route_code"]] = {
                     k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
                                       "realfeel_status", "humidity", "aqi_score", "aqi_flag",
-                                      "route_code", "route_name_short"]
+                                      "route_code", "route_name_short", "accuweather_station"]
                 }
 
     # Preserve original station order
