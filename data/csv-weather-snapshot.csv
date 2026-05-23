@@ -1,14 +1,14 @@
 route_code,route_name_short,temp,realfeel_temp,realfeel_status,humidity,rsi_flag,rsi_forecast,aqi_score,aqi_flag
-XJG4+7J|5PX4+HQ,Airport Expy,,,Very Warm,48,,,61,Poor
-XHJ7+MG|WJM6+VC,Central Diagonal 1,33,34,Hot,61,,,31,Fair
-WHR9+R6|XJGF+6J,Central Diagonal 2,31,32,Hot,50,,Rain starting in 16 min,54,Poor
-WH5F+26|WJ8X+F5W,Double Decker Flyover,32,32,Very Warm,49,,Rain starting in 15 min,52,Poor
-XJPW+92|WJP4+FF,East Inner Ring,32,32,Very Warm,48,,Rain starting in 3 min,58,Poor
-XMW9+G8|WMJR+V4,East Outer Ring,32,32,Hot,46,,Rain ending in 25 min,54,Poor
-VJRQ+2M|RMJJ+F4,Hosur Road,32,32,Very Warm,49,,Rain starting in 6 min,54,Poor
-WGG8+G5|XH7P+G6,Mysore Road,32,32,Very Warm,49,,Rain starting in 20 min,50,Poor
-2HM2+P8|XJV5+RG,North Inner Ring,32,35,Hot,47,,,50,Poor
-2HVW+G8|XJXR+WG,North Outer Ring,32,36,Hot,51,,,24,Fair
-XPC7+72|XM33+J3,Old Airport Road,32,32,Hot,49,,Rain ending in 31 min,54,Poor
-WP44+W8|WJFH+XQ,Sarjapur Road,32,32,Very Warm,49,,Rain ending in 37 min,50,Poor
-WHCJ+26|XGCP+FV,South Outer Ring,32,32,Very Warm,49,,Rain starting in 14 min,52,Poor
+XJG4+7J|5PX4+HQ,Airport Expy,32,32,Very Warm,48,,,73,Poor
+XHJ7+MG|WJM6+VC,Central Diagonal 1,33,36,Hot,61,,,26,Fair
+WHR9+R6|XJGF+6J,Central Diagonal 2,31,34,Hot,50,,Rain starting in 14 min,73,Poor
+WH5F+26|WJ8X+F5W,Double Decker Flyover,32,33,Very Warm,49,,Rain starting in 7 min,52,Poor
+XJPW+92|WJP4+FF,East Inner Ring,32,32,Very Warm,48,,Rain starting in 7 min,69,Poor
+XMW9+G8|WMJR+V4,East Outer Ring,32,34,Hot,46,,Rain starting in 3 min,64,Poor
+VJRQ+2M|RMJJ+F4,Hosur Road,32,33,Very Warm,49,,,64,Poor
+WGG8+G5|XH7P+G6,Mysore Road,32,33,Very Warm,49,,Rain starting in 14 min,67,Poor
+2HM2+P8|XJV5+RG,North Inner Ring,32,34,Hot,47,,Rain starting in 5 min,65,Poor
+2HVW+G8|XJXR+WG,North Outer Ring,32,35,Hot,51,,Rain starting in 77 min,24,Fair
+XPC7+72|XM33+J3,Old Airport Road,32,34,Hot,49,,,64,Poor
+WP44+W8|WJFH+XQ,Sarjapur Road,32,33,Very Warm,49,,Rain ending in 35 min,61,Poor
+WHCJ+26|XGCP+FV,South Outer Ring,32,33,Very Warm,49,,,64,Poor
