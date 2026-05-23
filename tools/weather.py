@@ -83,23 +83,22 @@ def _get_with_retry(url: str, retries: int = 4, delay: float = 3.0) -> requests.
 def extract_aqi(url: str) -> dict:
     """Scrape AQI number and category from an AccuWeather air-quality-index page."""
     resp = _get_with_retry(url)
+    soup = BeautifulSoup(resp.text, "lxml")
 
-    page_text = BeautifulSoup(resp.text, "lxml").get_text(" ", strip=True)
     aqi_value = None
     aqi_category = None
 
-    # Matches patterns like "79 AQI Poor" or "79 AQI\nPoor"
-    m = re.search(r"(\d{1,3})\s*AQI\s+(Good|Fair|Moderate|Poor|Unhealthy|Very Unhealthy|Hazardous|Dangerous|Excellent)", page_text)
-    if m:
-        aqi_value = m.group(1)
-        aqi_category = m.group(2)
-    else:
-        # Fallback: at least grab the number
-        m = re.search(r"(\d{1,3})\s*AQI", page_text)
+    num_el = soup.select_one("#current .aq-number")
+    if num_el:
+        m = re.search(r"(\d+)", num_el.get_text(strip=True))
         if m:
             aqi_value = m.group(1)
 
-    return {"aqi_score": aqi_value, "aqi_flag": aqi_category}
+    cat_el = soup.select_one("#current .category-text")
+    if cat_el:
+        aqi_category = cat_el.get_text(strip=True) or None
+
+    return {"aqi": aqi_value, "aqi_flag": aqi_category}
 
 
 def build_minutecast_url(station: str) -> str:
@@ -121,89 +120,69 @@ def build_current_weather_url(station: str) -> str:
 
 
 def extract_current_weather(url: str) -> dict:
-    """Extract RealFeel word and humidity from current-weather page."""
-    resp = _get_with_retry(url)
-    soup = BeautifulSoup(resp.text, "lxml")
-
-    realfeel_word = None
-    humidity = None
-
-    card = soup.select_one(".current-weather-card")
-    if card:
-        # First label.clickable under current-weather-card is the RealFeel word
-        label = card.select_one(".current-weather-extra .label.clickable")
-        if label:
-            realfeel_word = label.get_text(strip=True)
-
-        for item in card.select(".detail-item"):
-            text = item.get_text(" ", strip=True)
-            if text.startswith("Humidity") and "Indoor" not in text:
-                m = re.search(r"(\d+)", text)
-                if m:
-                    humidity = m.group(1)
-
-    return {"realfeel_status": realfeel_word, "humidity": humidity}
-
-
-def extract_minute_weather(url: str) -> dict:
-    """Scrape temp, realfeel temp, weather phenomenon, and forecast from minute-weather-forecast page."""
+    """Extract temp, temp_flag, realfeel, realfeel_flag and humidity from current-weather page."""
     resp = _get_with_retry(url)
     soup = BeautifulSoup(resp.text, "lxml")
 
     temp = None
-    realfeel_temp = None
-    rsi_flag = None
-    rsi_forecast = None
+    temp_flag = None
+    realfeel = None
+    realfeel_flag = None
+    humidity = None
 
-    # Try to find the current temp in the forecast
-    temp_el = soup.select_one(".current-temp .temp, .temp-value, [class*='temp']")
+    # temp: innermost div inside .current-weather-info > div > div
+    temp_el = soup.select_one(".current-weather-info > div > div")
     if temp_el:
         m = re.search(r"(\d+)", temp_el.get_text(strip=True))
         if m:
             temp = m.group(1)
 
-    # Look for RealFeel in the page
-    page_text = soup.get_text(" ", strip=True)
-    m = re.search(r"RealFeel(?:®)?\s*(\d+)[°º]?", page_text)
-    if m:
-        realfeel_temp = m.group(1)
+    # temp_flag: .current-weather .phrase
+    phrase_el = soup.select_one(".current-weather .phrase")
+    if phrase_el:
+        temp_flag = phrase_el.get_text(strip=True) or None
 
-    # Extract forecast text from .summary
+    # realfeel: first div inside .current-weather-extra, integer only
+    realfeel_el = soup.select_one(".current-weather-extra.no-realfeel-phrase > div")
+    if realfeel_el:
+        m = re.search(r"(\d+)", realfeel_el.get_text(strip=True))
+        if m:
+            realfeel = m.group(1)
+
+    # realfeel_flag: nested div > div > div inside .current-weather-extra
+    realfeel_flag_el = soup.select_one(".current-weather-extra.no-realfeel-phrase > div > div > div")
+    if realfeel_flag_el:
+        realfeel_flag = realfeel_flag_el.get_text(strip=True) or None
+
+    # humidity: 5th detail item, 2nd cell
+    humidity_el = soup.select_one(".current-weather-details.no-realfeel-phrase.odd > div:nth-child(5) > div:nth-child(2)")
+    if humidity_el:
+        m = re.search(r"(\d+)", humidity_el.get_text(strip=True))
+        if m:
+            humidity = m.group(1)
+
+    return {"temp": temp, "temp_flag": temp_flag, "realfeel": realfeel, "realfeel_flag": realfeel_flag, "humidity": humidity}
+
+
+def extract_minute_weather(url: str) -> dict:
+    """Scrape rsi_flag and rsi_forecast from minute-weather-forecast page."""
+    resp = _get_with_retry(url)
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    rsi_flag = None
+    rsi_forecast = None
+
+    # rsi_flag: .conditions-icon .icon-phrase
+    flag_el = soup.select_one(".conditions-icon p.icon-phrase")
+    if flag_el:
+        rsi_flag = flag_el.get_text(strip=True) or None
+
+    # rsi_forecast: .summary
     summary_el = soup.select_one(".summary")
     if summary_el:
-        rsi_forecast = summary_el.get_text(strip=True)
+        rsi_forecast = summary_el.get_text(strip=True) or None
 
-    # Check for "No Precipitation" first - if present, leave rsi_flag as None (blank in CSV)
-    if "no precipitation" in page_text.lower():
-        rsi_flag = None
-    else:
-        # Look for weather phenomenon in .phrase elements
-        # There are many .phrase elements - find the first one with actual precipitation info
-        for phrase_el in soup.select(".phrase"):
-            phrase_text = phrase_el.get_text(strip=True)
-            if any(p in phrase_text.lower() for p in ["rain", "snow", "drizzle", "showers", "ice"]) and "No Precipitation" not in phrase_text:
-                rsi_flag = phrase_text
-                break
-
-        # Fallback: look for weather phenomenon in page text if not found in phrases
-        if not rsi_flag:
-            m = re.search(r"((?:Light\s+)|(?:Heavy\s+))?(Rain|Snow|Ice\s+Mix|Drizzle|Showers)", page_text, re.IGNORECASE)
-            if m:
-                if m.group(1):
-                    rsi_flag = (m.group(1) + m.group(2)).strip()
-                else:
-                    rsi_flag = m.group(2)
-                rsi_flag = rsi_flag[0].upper() + rsi_flag[1:]
-
-    # Look for "Periods of rain will continue for X min" pattern
-    if not rsi_flag:
-        m = re.search(r"Periods of (Rain|Snow|Ice Mix|Drizzle|Showers)\s+will\s+continue\s+for\s+(\d+)\s*min", page_text, re.IGNORECASE)
-        if m:
-            rsi_flag = m.group(1)
-            if not rsi_forecast:
-                rsi_forecast = f"{m.group(1)} {m.group(2)} min"
-
-    return {"temp": temp, "realfeel_temp": realfeel_temp, "rsi_flag": rsi_flag, "rsi_forecast": rsi_forecast}
+    return {"rsi_flag": rsi_flag, "rsi_forecast": rsi_forecast}
 
 
 def build_aqi_url(station: str) -> str:
@@ -240,9 +219,9 @@ CSV_FIELDS = [
 
 # Column order for snapshot CSV (used by --json flag)
 SNAPSHOT_FIELDS = [
-    "route_code", "route_name_short", "accuweather_station", "temp", "realfeel_temp",
-    "realfeel_status", "humidity", "rsi_flag", "rsi_forecast",
-    "aqi_score", "aqi_flag"
+    "route_code", "route_name_short", "accuweather_station", "temp", "temp_flag",
+    "realfeel", "realfeel_flag", "humidity", "rsi_flag", "rsi_forecast",
+    "aqi", "aqi_flag"
 ]
 
 
@@ -336,19 +315,19 @@ def main() -> None:
         try:
             data = extract_minute_weather(minute_url)
         except requests.RequestException:
-            data = {k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast"]}
+            data = {k: None for k in ["rsi_flag", "rsi_forecast"]}
 
         try:
             current_data = extract_current_weather(current_url)
             data.update(current_data)
         except requests.RequestException:
-            data.update({"realfeel_status": None, "humidity": None})
+            data.update({k: None for k in ["temp", "temp_flag", "realfeel", "realfeel_flag", "humidity"]})
 
         try:
             aqi_data = extract_aqi(aqi_url)
             data.update(aqi_data)
         except requests.RequestException:
-            data.update({"aqi_score": None, "aqi_flag": None})
+            data.update({"aqi": None, "aqi_flag": None})
 
         data["route_code"] = s.get("route_code", "")
         data["route_name_short"] = s.get("label", s["station"])
@@ -367,8 +346,9 @@ def main() -> None:
             except Exception as exc:
                 print(f"  {s['station']} FAILED: {exc}", file=sys.stderr)
                 rows_map[s["route_code"]] = {
-                    k: None for k in ["temp", "realfeel_temp", "rsi_flag", "rsi_forecast",
-                                      "realfeel_status", "humidity", "aqi_score", "aqi_flag",
+                    k: None for k in ["temp", "temp_flag", "realfeel", "realfeel_flag",
+                                      "humidity", "rsi_flag", "rsi_forecast",
+                                      "aqi", "aqi_flag",
                                       "route_code", "route_name_short", "accuweather_station"]
                 }
 

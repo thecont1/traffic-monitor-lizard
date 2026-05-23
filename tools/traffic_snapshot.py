@@ -45,7 +45,7 @@ locations_df = pd.read_csv(locations_data)
 routes_df = pd.read_csv(str(DATA_DIR / "csv-routes-bangalore.csv"))
 out_file = "csv-traffic-bangalore"
 tf = TimezoneFinder()
-WEATHER_FIELDS = ["temp", "realfeel_temp", "humidity", "rsi_flag", "aqi_score"]
+WEATHER_FIELDS = ["temp", "realfeel", "humidity", "rsi_flag", "aqi"]
 
 @lru_cache(maxsize=1)
 def get_reference_tz():
@@ -270,16 +270,15 @@ def main():
     df["duration"] = df["duration"].astype(int)
 
     # Output CSV rows to stdout (without header) for workflow to capture
-    # Include weather fields (temp, realfeel_temp, humidity, rsi_flag, aqi_score) filled from weather data
     for _, row in df.iterrows():
         route_code = row["route_code"]
         weather = weather_by_route.get(route_code, {})
         temp = weather.get("temp", "")
-        realfeel_temp = weather.get("realfeel_temp", "")
+        realfeel = weather.get("realfeel", "")
         humidity = weather.get("humidity", "")
         rsi_flag = weather.get("rsi_flag", "")
-        aqi_score = weather.get("aqi_score", "")
-        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},{temp},{realfeel_temp},{humidity},{rsi_flag},{aqi_score}")
+        aqi = weather.get("aqi", "")
+        print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},{temp},{realfeel},{humidity},{rsi_flag},{aqi}")
 
     # Prepare transformed data for commit message (find slowest route)
     df_traffic = df.copy()
