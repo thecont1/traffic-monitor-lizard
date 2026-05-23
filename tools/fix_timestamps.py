@@ -169,7 +169,7 @@ def main():
     args = parser.parse_args()
     
     rows = load_data(CSV_PATH)
-    fieldnames = ["date", "time", "route_code", "duration", "distance"]
+    fieldnames = ["date", "time", "route_code", "duration", "distance", "temp", "realfeel", "humidity", "rsi_flag", "aqi"]
     
     cleaned_rows, log = deduplicate_same_cycle(rows)
     
