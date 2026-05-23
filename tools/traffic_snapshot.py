@@ -277,6 +277,8 @@ def main():
         realfeel = weather.get("realfeel", "")
         humidity = weather.get("humidity", "")
         rsi_flag = weather.get("rsi_flag", "")
+        if rsi_flag and rsi_flag.lower().startswith("no precipitation"):
+            rsi_flag = ""
         aqi = weather.get("aqi", "")
         print(f"{row['date']},{row['time']},{row['route_code']},{row['duration']},{row['distance']},{temp},{realfeel},{humidity},{rsi_flag},{aqi}")
 
