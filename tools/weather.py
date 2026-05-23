@@ -168,16 +168,10 @@ def extract_minute_weather(url: str) -> dict:
     if m:
         realfeel_temp = m.group(1)
 
-    # Look for forecast patterns: "Rain ending in 21 min", "Rain starting in 61 min"
-    m = re.search(r"(Rain|Snow|Ice\s+Mix|Drizzle|Showers)\s+(ending|starting)\s+in\s+(\d+)\s*min", page_text, re.IGNORECASE)
-    if m:
-        rsi_forecast = f"{m.group(1)} {m.group(2)} in {m.group(3)} min"
-
-    # Look for "Until" patterns for forecast time
-    if not rsi_forecast:
-        m = re.search(r"Until\s+(\d{1,2}:\d{2}\s*(?:AM|PM))", page_text, re.IGNORECASE)
-        if m:
-            rsi_forecast = m.group(1)
+    # Extract forecast text from .summary
+    summary_el = soup.select_one(".summary")
+    if summary_el:
+        rsi_forecast = summary_el.get_text(strip=True)
 
     # Check for "No Precipitation" first - if present, leave rsi_flag as None (blank in CSV)
     if "no precipitation" in page_text.lower():
