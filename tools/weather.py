@@ -154,8 +154,8 @@ def extract_current_weather(url: str) -> dict:
     if realfeel_flag_el:
         realfeel_flag = realfeel_flag_el.get_text(strip=True) or None
 
-    # humidity: 5th detail item, 2nd cell
-    humidity_el = soup.select_one(".current-weather-details.no-realfeel-phrase.odd > div:nth-child(5) > div:nth-child(2)")
+    # humidity: 4th detail item, 2nd cell
+    humidity_el = soup.select_one(".current-weather-details.no-realfeel-phrase > div:nth-child(4) > div:nth-child(2)")
     if humidity_el:
         m = re.search(r"(\d+)", humidity_el.get_text(strip=True))
         if m:
