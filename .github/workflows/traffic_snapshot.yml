@@ -37,7 +37,7 @@ jobs:
         run: |
           dedup_output="$(uv run tools/fix_timestamps.py --apply)"
           echo "$dedup_output"
-          removed="$(printf '%s\n' "$dedup_output" | awk -F: '/Rows removed/ {gsub(/[ ,]/, "", $2); print $2; exit}')"
+          removed="$(printf '%s\n' "$dedup_output" | awk -F: '/Old duplicates removed/ {gsub(/[ ,]/, "", $2); print $2; exit}')"
           if [ -z "$removed" ]; then
             removed=0
           fi
