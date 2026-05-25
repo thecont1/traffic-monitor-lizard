@@ -1,7 +1,7 @@
 """
 fix_timestamps.py – Simple deduplication for traffic data.
 
-Removes exact duplicate rows (same date, time, route_code, duration, distance).
+Keeps only one reading per route per hour.
 Only processes records older than 24 hours; recent data is left untouched.
 
 Usage:
@@ -47,14 +47,16 @@ def parse_row_datetime(row: dict) -> datetime:
 
 def deduplicate(rows: list[dict]) -> tuple[list[dict], int]:
     """
-    Remove exact duplicates keyed by (date, time, route_code, duration, distance).
-    Keeps the first occurrence. Returns (cleaned_rows, removed_count).
+    Keep only one reading per route per hour.
+    Key is (date, hour, route_code). Keeps the first occurrence.
+    Returns (cleaned_rows, removed_count).
     """
-    seen = set()
+    seen: set[tuple[str, str, str]] = set()
     cleaned = []
     removed = 0
     for row in rows:
-        key = (row["date"], row["time"], row["route_code"], row["duration"], row["distance"])
+        hour = row["time"].split(":")[0]
+        key = (row["date"], hour, row["route_code"])
         if key in seen:
             removed += 1
             continue
@@ -65,7 +67,7 @@ def deduplicate(rows: list[dict]) -> tuple[list[dict], int]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Remove exact duplicate traffic readings older than 24 hours."
+        description="Keep one reading per route per hour for data older than 24 hours."
     )
     parser.add_argument(
         "--apply",

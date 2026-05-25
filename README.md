@@ -200,19 +200,6 @@ A second cron job triggers a deduplication script once per day at 03:00 IST to r
 
 ---
 
-## Tips & Troubleshooting
-
-| Problem | What to try |
-|---------|-------------|
-| Chrome does not launch | Make sure Google Chrome is installed and up to date. The script uses your existing Chrome, not a bundled one. |
-| Google Maps blocks the scraper | The script uses a realistic user-agent and headless mode. If blocked, wait a few minutes and retry. |
-| `ModuleNotFoundError` on import | Run `uv sync` again to ensure all dependency groups are installed. |
-| Jupyter notebook kernel not found | Launch with `uv run jupyter notebook` so the virtual-environment kernel is available. |
-| Missing weather columns in traffic CSV | Weather is collected separately by `tools/weather.py`. It is not automatically merged; you can join on `route_code` and timestamp if needed. |
-| Data looks sparse for some hours | Check `tools/fix_timestamps.py --apply` to see if duplicates were recently removed. Some hours may genuinely have no data if the scraper encountered a network error. |
-
----
-
 ## License
 
 MIT
