@@ -6,7 +6,7 @@
 // - "TraffiCOracle BLR Dedup" - runs at 3am daily, calls with ?type=dedup
 // - "TraffiCOracle BLR Snapshot" - runs twice/hour, calls with ?type=snapshot
 
-const REPO = 'thecont1/blr-traffic-monitor';
+const REPO = 'thecont1/traffic-monitor-lizard';
 const WORKFLOW = 'traffic_snapshot.yml';
 const BRANCH = 'main';
 
