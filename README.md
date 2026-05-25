@@ -135,7 +135,7 @@ uv run pytest tests/ --cov=. --cov-report=html # Run tests with coverage
 | `temp` | `24` | Temperature in °C |
 | `realfeel` | `23` | "Real feel" temperature in °C |
 | `humidity` | `77` | Relative humidity percentage |
-| `rsi_flag` | *(empty or rain description)* | Rain / precipitation status |
+| `rsi_flag` | `Heavy Rain` | Rain / precipitation status |
 | `aqi` | `96` | Air quality index value |
 
 ### Routes data columns
@@ -188,15 +188,14 @@ cron-job.org  ──►  Cloudflare Worker  ──►  GitHub Actions
                               TraffiCOracle reads the public CSV
 ```
 
-1. **Scheduling** — `cron-job.org` hits a Cloudflare Worker twice every hour.
-2. **Validation** — the Worker checks a shared secret, then dispatches the GitHub Actions workflow.
-3. **Scraping** — a GitHub Actions runner installs `uv`, launches Chrome, and runs `traffic_snapshot.py`.
-4. **Storage** — new rows are appended to `csv-traffic-bangalore.csv` and committed.
-5. **Consumption** — TraffiCOracle (or your own script) fetches the updated CSV from GitHub's raw-content URL.
+1. **Trigger** — An external scheduler or manual dispatch triggers the GitHub Actions workflow.
+2. **Scraping** — A runner installs `uv`, launches Chrome, and runs `traffic_snapshot.py`.
+3. **Storage** — New rows are appended to `csv-traffic-bangalore.csv` and committed.
+4. **Consumption** — TraffiCOracle (or your own script) fetches the updated CSV from GitHub's raw-content URL.
 
-### Deduplication schedule
+### Deduplication
 
-A second cron job triggers a deduplication script once per day at 03:00 IST to remove duplicate readings, keeping one row per hour per route. This is so that the current day's analysis can benefit from a higher frequency of data points while the larger dataset does not get inflated; the deduplication process is idempotent. It commits the cleaned file with a commit message stating how many records were removed (or `0` if none).
+A daily deduplication pass keeps one reading per route per hour in the historical dataset. Recent data (< 24 hours) is left untouched so the current day's analysis benefits from higher-frequency readings. The dedup is idempotent and commits the cleaned file with a count of removed records.
 
 ---
 
