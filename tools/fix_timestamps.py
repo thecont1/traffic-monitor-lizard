@@ -20,6 +20,7 @@ import csv
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 CSV_PATH = DATA_DIR / "csv-traffic-bangalore.csv"
@@ -162,23 +163,45 @@ def main():
         description="Cycle-aware deduplication: keep one reading per collection cycle per route."
     )
     parser.add_argument(
-        "--apply", 
-        action="store_true", 
+        "--apply",
+        action="store_true",
         help="Write changes to CSV (default is dry-run)"
     )
     args = parser.parse_args()
-    
+
     rows = load_data(CSV_PATH)
     fieldnames = ["date", "time", "route_code", "duration", "distance", "temp", "realfeel", "humidity", "rsi_flag", "aqi"]
-    
-    cleaned_rows, log = deduplicate_same_cycle(rows)
-    
+
+    # Only deduplicate records older than 24 hours from now (IST).
+    # Recent data within the last 24 hours is left untouched so the
+    # current day's analysis always sees the freshest readings.
+    cutoff = datetime.now(ZoneInfo("Asia/Kolkata")) - timedelta(hours=24)
+    cutoff_naive = cutoff.replace(tzinfo=None)
+
+    old_rows = []
+    recent_rows = []
+    for row in rows:
+        ts = parse_row_datetime(row)
+        if ts < cutoff_naive:
+            old_rows.append(row)
+        else:
+            recent_rows.append(row)
+
+    cleaned_old, log = deduplicate_same_cycle(old_rows)
+
+    # Merge deduplicated old rows with untouched recent rows
+    cleaned_rows = cleaned_old + recent_rows
+    cleaned_rows.sort(key=lambda r: (r["date"], r["time"], r["route_code"]))
+
+    # Append summary about the 24-hour window
+    log.append(f"")
+    log.append(f"  Recent rows preserved (within 24h): {len(recent_rows):,}")
+    log.append(f"  Total rows after merge:             {len(cleaned_rows):,}")
+
     for line in log:
         print(line)
-    
+
     if args.apply:
-        # Sort by date, time, route_code for clean output
-        cleaned_rows.sort(key=lambda r: (r["date"], r["time"], r["route_code"]))
         write_data(CSV_PATH, cleaned_rows, fieldnames)
         print(f"\n✓ Written {len(cleaned_rows):,} rows to {CSV_PATH}")
     else:
