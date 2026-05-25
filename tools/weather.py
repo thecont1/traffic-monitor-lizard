@@ -154,12 +154,14 @@ def extract_current_weather(url: str) -> dict:
     if realfeel_flag_el:
         realfeel_flag = realfeel_flag_el.get_text(strip=True) or None
 
-    # humidity: 4th detail item, 2nd cell
-    humidity_el = soup.select_one(".current-weather-details.no-realfeel-phrase > div:nth-child(4) > div:nth-child(2)")
-    if humidity_el:
-        m = re.search(r"(\d+)", humidity_el.get_text(strip=True))
-        if m:
-            humidity = m.group(1)
+    # humidity: find by label text (AccuWeather layout changes item order)
+    for item in soup.select(".current-weather-details .detail-item"):
+        divs = item.select(":scope > div")
+        if len(divs) >= 2 and divs[0].get_text(strip=True) == "Humidity":
+            m = re.search(r"(\d+)", divs[1].get_text(strip=True))
+            if m:
+                humidity = m.group(1)
+            break
 
     return {"temp": temp, "temp_flag": temp_flag, "realfeel": realfeel, "realfeel_flag": realfeel_flag, "humidity": humidity}
 
