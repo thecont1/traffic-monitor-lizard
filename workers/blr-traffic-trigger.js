@@ -1,10 +1,10 @@
-// blr-traffic-trigger: Cloudflare Worker
+// traffic-trigger: Cloudflare Worker
 // Receives GET from cron-job.org, validates secret, dispatches GitHub Actions workflow_dispatch
 // Secrets required: CRON_SECRET, GITHUB_TOKEN
 //
 // Two cron jobs configured at cron-job.org:
-// - "TraffiCOracle BLR Dedup" - runs at 3am daily, calls with ?type=dedup
-// - "TraffiCOracle BLR Snapshot" - runs twice/hour, calls with ?type=snapshot
+// - "TraffiCOracle Dedup" - runs at 3am daily, calls with ?type=dedup
+// - "TraffiCOracle Snapshot" - runs twice/hour, calls with ?type=snapshot
 
 const REPO = 'thecont1/traffic-monitor-lizard';
 const WORKFLOW = 'traffic_snapshot.yml';
@@ -49,7 +49,7 @@ export default {
           'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
           'Accept': 'application/vnd.github+json',
           'Content-Type': 'application/json',
-          'User-Agent': 'blr-traffic-trigger/1.0',
+          'User-Agent': 'traffic-trigger/1.0',
         },
         body: dispatchBody,
       });
