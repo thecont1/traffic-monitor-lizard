@@ -26,9 +26,8 @@ def load_data(path: Path) -> list[dict]:
     with open(path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Skip rows missing required keys or having None keys (from extra blank columns)
-            if None in row:
-                continue
+            # Strip None keys caused by extra trailing commas/columns
+            row = {k: v for k, v in row.items() if k is not None}
             if not row.get("date") or not row.get("time") or not row.get("route_code"):
                 continue
             rows.append(row)
