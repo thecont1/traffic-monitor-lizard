@@ -13,9 +13,10 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-DATA_DIR = Path(__file__).parent.parent / "data"
-CSV_PATH = DATA_DIR / "csv-routes-bangalore.csv"
-WEATHER_CSV_PATH = DATA_DIR / "csv-weather-snapshot.csv"
+import config_loader as cfg
+
+CSV_PATH = cfg.data_path("routes_csv")
+WEATHER_CSV_PATH = cfg.data_path("weather_csv")
 
 HEADERS = {
     "User-Agent": (
@@ -107,7 +108,7 @@ def build_minutecast_url(station: str) -> str:
     if len(parts) != 2:
         raise ValueError(f"Expected 'name/id', got '{station}'")
     name, lid = parts
-    return f"https://www.accuweather.com/en/in/{name}/{lid}/minute-weather-forecast/{lid}?unit=c"
+    return f"https://www.accuweather.com/en/{cfg.COUNTRY_CODE}/{name}/{lid}/minute-weather-forecast/{lid}?unit=c"
 
 
 def build_current_weather_url(station: str) -> str:
@@ -116,7 +117,7 @@ def build_current_weather_url(station: str) -> str:
     if len(parts) != 2:
         raise ValueError(f"Expected 'name/id', got '{station}'")
     name, lid = parts
-    return f"https://www.accuweather.com/en/in/{name}/{lid}/current-weather/{lid}?unit=c"
+    return f"https://www.accuweather.com/en/{cfg.COUNTRY_CODE}/{name}/{lid}/current-weather/{lid}?unit=c"
 
 
 def extract_current_weather(url: str) -> dict:
@@ -193,7 +194,7 @@ def build_aqi_url(station: str) -> str:
     if len(parts) != 2:
         raise ValueError(f"Expected 'name/id', got '{station}'")
     name, lid = parts
-    return f"https://www.accuweather.com/en/in/{name}/{lid}/air-quality-index/{lid}?unit=c"
+    return f"https://www.accuweather.com/en/{cfg.COUNTRY_CODE}/{name}/{lid}/air-quality-index/{lid}?unit=c"
 
 
 def read_stations() -> list:
@@ -302,7 +303,7 @@ def print_table(rows: list) -> None:
 def main() -> None:
     """Fetch weather for all stations, write snapshot CSV, and print a table or JSON."""
     import argparse
-    parser = argparse.ArgumentParser(description="Fetch AccuWeather data for Bangalore route stations.")
+    parser = argparse.ArgumentParser(description="Fetch AccuWeather data for route stations.")
     parser.add_argument("--json", action="store_true", help="Output as JSON instead of table")
     args = parser.parse_args()
 

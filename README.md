@@ -1,14 +1,14 @@
-# Bangalore Traffic Monitor
+# Traffic Monitor Lizard
 
-The data engine behind [TraffiCOracle](https://github.com/thecont1/TraffiCOracle). This project build a dataset of live hyperlocal traffic and weather readings, and provides a full toolkit for analysing and visualising the results.
+The data engine behind [TraffiCOracle](https://github.com/thecont1/TraffiCOracle). This project builds a dataset of live hyperlocal traffic and weather readings, and provides a full toolkit for analysing and visualising the results.
 
-It is designed for **civic technologists**, **urban planners**, **data journalists**, and **researchers** who want a transparent, reproducible pipeline for understanding how a city (Bangalore, for now) moves, how traffic patterns evolve, what factors influence travel times, and the characteristics of roads and routes.
+It is designed for **civic technologists**, **urban planners**, **data journalists**, and **researchers** who want a transparent, reproducible pipeline for understanding how a city moves, how traffic patterns evolve, what factors influence travel times, and the characteristics of roads and routes.
 
 ---
 
 ## What it does
 
-Every 20 minutes of every hour of every day, an automated script asks Google Maps to estimate how long it would take to go from Point A to Point B, for each from a set of [pre-determined routes](https://github.com/thecont1/blr-traffic-monitor/blob/main/data/csv-routes-bangalore.csv), and records the result. Over weeks and months, this builds up a rich dataset. The project also pulls in local weather data so you can later ask whether rain or heat correlate with traffic congestion.
+An automated script periodically asks Google Maps to estimate how long it would take to go from Point A to Point B, for each from a set of pre-determined routes, and records the result. Over weeks and months, this builds up a rich dataset. The project also pulls in local weather data so you can later ask whether rain or heat correlate with traffic congestion.
 
 Because everything is stored as plain CSV files in a public GitHub repository, the data is **open** (anyone can download and verify it), **versioned** (every commit is a snapshot in time) and **reusable** (the companion dashboard TraffiCOracle reads these files directly).
 
@@ -61,8 +61,8 @@ Because everything is stored as plain CSV files in a public GitHub repository, t
 ### 1. Install dependencies
 
 ```bash
-git clone https://github.com/thecont1/blr-traffic-monitor.git 
-cd blr-traffic-monitor
+git clone https://github.com/thecont1/traffic-monitor-lizard.git
+cd traffic-monitor-lizard
 uv sync
 ```
 
@@ -83,7 +83,7 @@ This will:
 To **append** the output to the historical dataset:
 
 ```bash
-uv run python tools/traffic_snapshot.py >> data/csv-traffic-bangalore.csv
+uv run python tools/traffic_snapshot.py >> data/csv-traffic.csv
 ```
 
 ### 3. Explore the data in a notebook
@@ -118,8 +118,8 @@ uv run pytest tests/ --cov=. --cov-report=html # Run tests with coverage
 
 | File | Purpose |
 |------|---------|
-| `data/csv-traffic-bangalore.csv` | All timestamped traffic readings |
-| `data/csv-routes-bangalore.csv` | Route definitions and display metadata |
+| `data/csv-traffic-*.csv` | All timestamped traffic readings (city-specific) |
+| `data/csv-routes-*.csv` | Route definitions and display metadata (city-specific) |
 | `data/csv-locations_*.csv` | Location names mapped to Plus Codes |
 | `data/csv-weather-snapshot.csv` | Latest weather snapshot for each route |
 
@@ -128,7 +128,7 @@ uv run pytest tests/ --cov=. --cov-report=html # Run tests with coverage
 | Column | Example | Meaning |
 |--------|---------|---------|
 | `date` | `2025-09-25` | Calendar date of collection |
-| `time` | `14:25` | Collection time (24-hour, local IST) |
+| `time` | `14:25` | Collection time (24-hour, local time) |
 | `route_code` | `2HM2+P8\|XJV5+RG` | Origin and destination Plus Codes joined by `\|` |
 | `duration` | `32` | Travel time in minutes |
 | `distance` | `11.0` | Route distance in kilometres |
@@ -143,7 +143,7 @@ uv run pytest tests/ --cov=. --cov-report=html # Run tests with coverage
 | Column | Example | Meaning |
 |--------|---------|---------|
 | `route_code` | `XJG4+7J\|5PX4+HQ` | Same identifier used in the traffic file |
-| `label_full` | `MG Road Metro Station → Kempegowda International Airport` | Human-readable long name |
+| `label_full` | `Origin → Destination` | Human-readable long name |
 | `label_short` | `Airport Expy` | Short display label |
 | `map_link` | `https://maps.app.goo.gl/...` | Direct Google Maps link |
 | `accuweather_station` | `shantala-nagar/3352203` | Weather station used for this route |
@@ -158,7 +158,7 @@ Before rows are written, the scraper already performs basic sanity checks:
 
 The companion Python module `data_utils.py` adds further cleaning when you load the data for analysis:
 
-- Removes exact duplicates (same route, same day, same hour, same duration and distance)
+- Removes duplicates (same route, same day, same hour)
 - Computes `avg_speed` from `distance / (duration / 60)`
 - Adds temporal features: `timestamp`, `day_of_week`, `is_weekend`, `time_category`
 
@@ -190,7 +190,7 @@ cron-job.org  ──►  Cloudflare Worker  ──►  GitHub Actions
 
 1. **Trigger** — An external scheduler or manual dispatch triggers the GitHub Actions workflow.
 2. **Scraping** — A runner installs `uv`, launches Chrome, and runs `traffic_snapshot.py`.
-3. **Storage** — New rows are appended to `csv-traffic-bangalore.csv` and committed.
+3. **Storage** — New rows are appended to the traffic CSV and committed.
 4. **Consumption** — TraffiCOracle (or your own script) fetches the updated CSV from GitHub's raw-content URL.
 
 ### Deduplication

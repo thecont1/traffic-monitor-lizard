@@ -1,4 +1,4 @@
-name: Bangalore Traffic Snapshot
+name: Traffic Monitor Snapshot
 
 on:
   workflow_dispatch:

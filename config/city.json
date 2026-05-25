@@ -1,0 +1,11 @@
+{
+  "city": "bangalore",
+  "display_name": "Bangalore",
+  "country_code": "in",
+  "timezone": "Asia/Kolkata",
+  "data": {
+    "routes_csv": "data/csv-routes-bangalore.csv",
+    "traffic_csv": "data/csv-traffic-bangalore.csv",
+    "weather_csv": "data/csv-weather-snapshot.csv"
+  }
+}

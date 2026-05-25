@@ -15,8 +15,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-DATA_DIR = Path(__file__).parent.parent / "data"
-CSV_PATH = DATA_DIR / "csv-traffic-bangalore.csv"
+import config_loader as cfg
+
+CSV_PATH = cfg.data_path("traffic_csv")
 FIELDNAMES = ["date", "time", "route_code", "duration", "distance", "temp", "realfeel", "humidity", "rsi_flag", "aqi"]
 
 
@@ -78,8 +79,8 @@ def main():
 
     rows = load_data(CSV_PATH)
 
-    # Only deduplicate records older than 24 hours from now (IST).
-    cutoff = datetime.now(ZoneInfo("Asia/Kolkata")) - timedelta(hours=24)
+    # Only deduplicate records older than 24 hours from now (local timezone).
+    cutoff = datetime.now(ZoneInfo(cfg.TIMEZONE)) - timedelta(hours=24)
     cutoff_naive = cutoff.replace(tzinfo=None)
 
     old_rows = []

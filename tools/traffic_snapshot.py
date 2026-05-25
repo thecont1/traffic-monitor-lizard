@@ -17,6 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from openlocationcode import openlocationcode as olc
 from timezonefinder import TimezoneFinder
+import config_loader as cfg
 global locations_data, referenceLatitude, referenceLongitude
 DATA_DIR = Path(__file__).parent.parent / "data"
 LOCATION_GLOB = str(DATA_DIR / "csv-locations*.csv")
@@ -42,8 +43,8 @@ except ValueError as exc:
         f"Filename: {locations_data}"
     ) from exc
 locations_df = pd.read_csv(locations_data)
-routes_df = pd.read_csv(str(DATA_DIR / "csv-routes-bangalore.csv"))
-out_file = "csv-traffic-bangalore"
+routes_df = pd.read_csv(str(cfg.data_path("routes_csv")))
+out_file = str(cfg.data_path("traffic_csv")).replace(".csv", "").split("/")[-1]
 tf = TimezoneFinder()
 WEATHER_FIELDS = ["temp", "realfeel", "humidity", "rsi_flag", "aqi"]
 
@@ -53,13 +54,13 @@ def get_reference_tz():
     if tz_name is None:
         tz_name = tf.closest_timezone_at(lat=referenceLatitude, lng=referenceLongitude)
     if tz_name is None:
-        tz_name = "Asia/Kolkata"
+        tz_name = cfg.TIMEZONE
     return ZoneInfo(tz_name)
 
 
 def load_weather_by_route() -> dict:
-    """Load weather data keyed by route_code from csv-weather-snapshot.csv."""
-    weather_csv = DATA_DIR / "csv-weather-snapshot.csv"
+    """Load weather data keyed by route_code from weather snapshot CSV."""
+    weather_csv = cfg.data_path("weather_csv")
     if not weather_csv.exists():
         print("No weather snapshot found, using empty values", file=sys.stderr)
         return {}
