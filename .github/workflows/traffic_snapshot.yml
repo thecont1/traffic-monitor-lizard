@@ -72,7 +72,7 @@ jobs:
         run: |
           if [ "${{ inputs.job_type }}" = "dedup" ]; then
             removed="${{ steps.dedup.outputs.removed }}"
-            echo "message=$removed records removed" >> "$GITHUB_OUTPUT"
+            echo "message=dedup: $removed records removed" >> "$GITHUB_OUTPUT"
           else
             echo "message=${{ steps.snapshot.outputs.message }}" >> "$GITHUB_OUTPUT"
           fi
