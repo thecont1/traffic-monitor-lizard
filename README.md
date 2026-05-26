@@ -196,9 +196,3 @@ cron-job.org  ──►  Cloudflare Worker  ──►  GitHub Actions
 ### Deduplication
 
 A daily deduplication pass keeps one reading per route per hour in the historical dataset. Recent data (< 24 hours) is left untouched so the current day's analysis benefits from higher-frequency readings. The dedup is idempotent and commits the cleaned file with a count of removed records.
-
----
-
-## License
-
-MIT
