@@ -86,7 +86,7 @@ jobs:
           git rm --cached --ignore-unmatch weather.md weather_snapshot.csv || true
           rm -f weather.md weather_snapshot.csv
 
-          # Stage outputs before pulling to avoid "unstaged changes" rebase error
+          # Stage outputs to commit them
           git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv || true
 
           if git diff --cached --quiet; then
@@ -96,6 +96,11 @@ jobs:
 
           git commit -m "${{ steps.commit_message.outputs.message }}"
 
-          # Pull with rebase; for data CSV conflicts always keep ours (appended rows)
-          git pull --rebase -X ours origin main || true
-          git push origin HEAD:main || (git pull --rebase -X ours origin main && git push origin HEAD:main)
+          # Push to remote. If rejected (remote diverged), fetch+rebase and retry.
+          # Avoid git pull --rebase which fails on shallow clones with "unstaged changes".
+          git push origin HEAD:main || {
+            echo "Push rejected — rebasing on remote changes..."
+            git fetch origin main
+            git rebase origin/main -X ours
+            git push --force-with-lease origin HEAD:main
+          }
