@@ -35,7 +35,7 @@ jobs:
         id: dedup
         if: ${{ inputs.job_type == 'dedup' }}
         run: |
-          dedup_output="$(uv run --frozen tools/fix_timestamps.py --apply)"
+          dedup_output="$(uv run tools/fix_timestamps.py --apply)"
           echo "$dedup_output"
           removed="$(printf '%s\n' "$dedup_output" | awk -F: '/Old duplicates removed/ {gsub(/[ ,]/, "", $2); print $2; exit}')"
           if [ -z "$removed" ]; then
@@ -49,7 +49,7 @@ jobs:
             inputs.job_type == 'snapshot'
             || inputs.job_type == ''
           }}
-        run: uv run --frozen tools/weather.py --json
+        run: uv run tools/weather.py --json
 
       - name: Run traffic snapshot and append to CSV
         id: snapshot
@@ -61,7 +61,7 @@ jobs:
         run: |
           export LC_ALL=en_US.UTF-8
           export LANG=en_US.UTF-8
-          uv run --frozen tools/traffic_snapshot.py > /tmp/snapshot_output.txt
+          uv run tools/traffic_snapshot.py > /tmp/snapshot_output.txt
           head -n -1 /tmp/snapshot_output.txt >> data/csv-traffic-bangalore.csv
           message="$(tail -n 1 /tmp/snapshot_output.txt)"
           echo "$message"
@@ -86,8 +86,8 @@ jobs:
           git rm --cached --ignore-unmatch weather.md weather_snapshot.csv || true
           rm -f weather.md weather_snapshot.csv
 
-          # Stage outputs to commit them
-          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv || true
+          # Stage outputs to commit them (include uv.lock — uv rewrites it on every run)
+          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv uv.lock || true
 
           if git diff --cached --quiet; then
             echo "No changes"
@@ -97,8 +97,8 @@ jobs:
           git commit -m "${{ steps.commit_message.outputs.message }}"
 
           # Push to remote. If rejected (remote diverged), fetch+rebase and retry.
-          # --frozen on uv run prevents uv.lock from being mutated (the real root cause of
-          # "unstaged changes" errors — uv silently rewrites the lockfile on every run).
+          # uv.lock must be staged because uv rewrites it on every run; without this,
+          # the leftover diff causes "unstaged changes" errors on rebase/pull.
           git push origin HEAD:main || {
             echo "Push rejected — rebasing on remote changes..."
             git fetch origin main
