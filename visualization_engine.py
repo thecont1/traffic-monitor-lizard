@@ -14,6 +14,7 @@ import seaborn as sns
 from typing import Dict, List, Optional, Any
 import warnings
 from sklearn.preprocessing import MinMaxScaler
+from scipy.interpolate import interp1d
 
 
 # ============================================================================
@@ -323,7 +324,7 @@ class VisualizationEngine:
     # Temporal Pattern Visualizations
     # ========================================================================
 
-    def plot_hourly_heatmap(self, route_code: Optional[str] = None) -> None:
+    def plot_hourly_heatmap(self, route_code: Optional[str] = None):
         """
         Generate heatmap showing average speed by hour-of-day and day-of-week.
 
@@ -430,7 +431,7 @@ class VisualizationEngine:
             axes[idx].set_visible(False)
 
         plt.tight_layout()
-        plt.show()
+        return fig
 
     def plot_calendar_heatmap(self, route_code: str) -> None:
         """
@@ -795,8 +796,7 @@ class VisualizationEngine:
         # Format plot
         ax.set_xlabel('Hour of Day', fontsize=12, fontweight='bold')
         ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
-        title_suffix = 'All Routes Comparison' if route_codes is None else f"Selected Routes ({len(selected_routes)})"
-        ax.set_title(f'Hour-of-Day Speed Profiles: {title_suffix}\n'
+        ax.set_title('Hour-of-Day Speed Profiles\n'
                     '(Shaded regions show ±1 standard deviation)',
                     fontsize=14, fontweight='bold', pad=20)
 
@@ -1415,142 +1415,140 @@ class VisualizationEngine:
 
     def plot_time_of_day_facets(self) -> None:
         """
-        Generate faceted visualization showing speed distributions by time-of-day category.
+        Generate interactive single-view visualization of speed distributions by time-of-day.
 
-        This visualization creates a small-multiple layout with 4 subplots, one for each
-        time-of-day category (morning rush, midday, evening rush, night). Each subplot
-        shows violin plots of speed distributions for all routes during that time period.
+        Displays one time-of-day category at a time with Previous/Next buttons to navigate.
+        Each chart is rendered at 300 DPI for high clarity.
 
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-            Displays the plot using matplotlib
-
-        Notes
-        -----
-        Time categories are defined as:
-        - Morning rush: 6-10 AM
-        - Midday: 10 AM - 4 PM
-        - Evening rush: 4-8 PM
-        - Night: 8 PM - 6 AM (includes evening 8 PM - 12 AM)
-
-        Each route is colored according to the color palette from routes_df.
-        Violin plots show the full distribution of speeds, revealing both central
-        tendency and variability for each route during each time period.
+        Time categories (matching data_utils.compute_temporal_features):
+        - Late Night: 12-6 AM
+        - Morning: 6-8 AM
+        - Morning Rush: 8-11 AM
+        - Early Afternoon: 11 AM - 2 PM
+        - Late Afternoon: 2-6 PM
+        - Evening Rush: 6-9 PM
+        - Night: 9 PM - 12 AM
 
         Examples
         --------
         >>> viz = VisualizationEngine(df, routes_df)
         >>> viz.plot_time_of_day_facets()
         """
-        # Ensure temporal features are present
+        from IPython.display import display, clear_output
+        import ipywidgets as widgets
+
         df_with_features = self._ensure_temporal_features(self.df)
 
-        # Define the 4 main time categories to display
-        time_categories = ['morning_rush', 'midday', 'evening_rush', 'night']
+        time_categories = [
+            'late_night', 'morning', 'morning_rush',
+            'early_afternoon', 'late_afternoon',
+            'evening_rush', 'night',
+        ]
         time_labels = {
-            'morning_rush': 'Morning Rush\n(6-10 AM)',
-            'midday': 'Midday\n(10 AM - 4 PM)',
-            'evening_rush': 'Evening Rush\n(4-8 PM)',
-            'night': 'Night\n(8 PM - 6 AM)'
+            'late_night': 'Late Night (12-6 AM)',
+            'morning': 'Morning (6-8 AM)',
+            'morning_rush': 'Morning Rush (8-11 AM)',
+            'early_afternoon': 'Early Afternoon (11 AM - 2 PM)',
+            'late_afternoon': 'Late Afternoon (2-6 PM)',
+            'evening_rush': 'Evening Rush (6-9 PM)',
+            'night': 'Night (9 PM - 12 AM)',
         }
 
-        # Create figure with 2x2 grid
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        axes = axes.flatten()
-
-        # Get all routes
         routes = sorted(df_with_features['route_code'].unique())
 
-        # Plot each time category
-        for idx, time_cat in enumerate(time_categories):
-            ax = axes[idx]
+        def render_chart(idx: int):
+            time_cat = time_categories[idx]
+            time_data = df_with_features[
+                df_with_features['time_category'] == time_cat
+            ]
 
-            # Filter data for this time category
-            # Note: 'evening' category (8-12 PM) should be included in 'night'
-            if time_cat == 'night':
-                time_data = df_with_features[
-                    df_with_features['time_category'].isin(['night', 'evening'])
-                ]
-            else:
-                time_data = df_with_features[
-                    df_with_features['time_category'] == time_cat
-                ]
+            fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
 
             if time_data.empty:
                 ax.text(0.5, 0.5, f'No data for {time_labels[time_cat]}',
-                       ha='center', va='center', fontsize=12, color='gray')
-                ax.set_title(time_labels[time_cat], fontsize=12, fontweight='bold')
-                continue
+                        ha='center', va='center', fontsize=14, color='gray')
+                ax.set_title(time_labels[time_cat], fontsize=14, fontweight='bold', pad=15)
+                ax.set_xticks([])
+                ax.set_yticks([])
+            else:
+                data_by_route = []
+                colors = []
+                labels = []
 
-            # Prepare data for violin plot
-            data_by_route = []
-            colors = []
-            labels = []
+                for route_code in routes:
+                    route_data = time_data[time_data['route_code'] == route_code]
+                    if not route_data.empty:
+                        data_by_route.append(route_data['avg_speed'].values)
+                        colors.append(self._get_route_color(route_code))
+                        labels.append(self._get_route_label(route_code, label_type='short'))
 
-            for route_code in routes:
-                route_data = time_data[time_data['route_code'] == route_code]
-                if not route_data.empty:
-                    data_by_route.append(route_data['avg_speed'].values)
-                    colors.append(self._get_route_color(route_code))
-                    labels.append(self._get_route_label(route_code, label_type='short'))
+                if data_by_route:
+                    parts = ax.violinplot(
+                        data_by_route, positions=range(len(data_by_route)),
+                        showmeans=True, showmedians=True, widths=0.7,
+                    )
 
-            # Create violin plot
-            if data_by_route:
-                parts = ax.violinplot(data_by_route, positions=range(len(data_by_route)),
-                                     showmeans=True, showmedians=True, widths=0.7)
+                    for i, pc in enumerate(parts['bodies']):
+                        pc.set_facecolor(colors[i])
+                        pc.set_alpha(0.7)
+                        pc.set_edgecolor('black')
+                        pc.set_linewidth(1)
 
-                # Color the violin plots
-                for i, pc in enumerate(parts['bodies']):
-                    pc.set_facecolor(colors[i])
-                    pc.set_alpha(0.7)
-                    pc.set_edgecolor('black')
-                    pc.set_linewidth(1)
+                    parts['cmeans'].set_edgecolor('darkred')
+                    parts['cmeans'].set_linewidth(2)
+                    parts['cmedians'].set_edgecolor('darkblue')
+                    parts['cmedians'].set_linewidth(2)
 
-                # Style the mean and median lines
-                parts['cmeans'].set_edgecolor('darkred')
-                parts['cmeans'].set_linewidth(2)
-                parts['cmedians'].set_edgecolor('darkblue')
-                parts['cmedians'].set_linewidth(2)
+                    ax.set_xticks(range(len(labels)))
+                    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=10)
+                    ax.set_ylabel('Average Speed (km/h)', fontsize=12, fontweight='bold')
+                    ax.grid(True, alpha=0.3, linestyle='--', axis='y')
+                    ax.set_axisbelow(True)
 
-                # Set x-axis labels
-                ax.set_xticks(range(len(labels)))
-                ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=9)
+                    total_samples = len(time_data)
+                    ax.text(
+                        0.98, 0.98, f'n={total_samples:,}',
+                        transform=ax.transAxes, ha='right', va='top',
+                        fontsize=10, style='italic', color='gray',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                                  edgecolor='gray', alpha=0.7),
+                    )
 
-                # Set y-axis label
-                ax.set_ylabel('Average Speed (km/h)', fontsize=11, fontweight='bold')
+            ax.set_title(
+                f'{time_labels[time_cat]}  ({idx + 1}/{len(time_categories)})',
+                fontsize=14, fontweight='bold', pad=15,
+            )
+            fig.text(
+                0.5, 0.01,
+                'Red line = mean, Blue line = median. Wider sections = more common speeds.',
+                ha='center', fontsize=10, style='italic', color='gray',
+            )
+            plt.tight_layout(rect=[0, 0.03, 1, 1])
+            plt.show()
 
-                # Add grid
-                ax.grid(True, alpha=0.3, linestyle='--', axis='y')
-                ax.set_axisbelow(True)
+        state = {'idx': 0}
+        out = widgets.Output()
 
-                # Set title
-                ax.set_title(time_labels[time_cat], fontsize=12, fontweight='bold', pad=10)
+        def refresh():
+            with out:
+                clear_output(wait=True)
+                render_chart(state['idx'])
 
-                # Add sample size annotation
-                total_samples = len(time_data)
-                ax.text(0.98, 0.98, f'n={total_samples:,}',
-                       transform=ax.transAxes, ha='right', va='top',
-                       fontsize=9, style='italic', color='gray',
-                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
-                                edgecolor='gray', alpha=0.7))
+        def on_prev(_):
+            state['idx'] = (state['idx'] - 1) % len(time_categories)
+            refresh()
 
-        # Add overall title
-        fig.suptitle('Speed Distributions by Time of Day',
-                    fontsize=16, fontweight='bold', y=0.995)
+        def on_next(_):
+            state['idx'] = (state['idx'] + 1) % len(time_categories)
+            refresh()
 
-        # Add interpretation note
-        fig.text(0.5, 0.01,
-                'Note: Violin plots show the full distribution of speeds for each route during each time period. '
-                'Wider sections indicate more common speeds. Red line = mean, Blue line = median.',
-                ha='center', fontsize=10, style='italic', color='gray', wrap=True)
+        prev_btn = widgets.Button(description='◀ Previous', button_style='info')
+        next_btn = widgets.Button(description='Next ▶', button_style='info')
+        prev_btn.on_click(on_prev)
+        next_btn.on_click(on_next)
 
-        plt.tight_layout(rect=[0, 0.02, 1, 0.99])
-        plt.show()
+        display(widgets.VBox([widgets.HBox([prev_btn, next_btn]), out]))
+        refresh()
 
 
 
@@ -2536,7 +2534,8 @@ class VisualizationEngine:
         plt.tight_layout(rect=[0, 0.03, 1, 1])
         plt.show()
 
-    def plot_typical_day_profile(self, day_of_week: Optional[str] = None) -> None:
+    def plot_typical_day_profile(self, day_of_week: Optional[str] = None,
+                                  route_codes: list[str] | None = None) -> None:
         """
         Generate typical day profile for each day-of-week with variance bands.
 
@@ -2544,105 +2543,169 @@ class VisualizationEngine:
         with shaded regions showing variability (±1 standard deviation).
 
         If day_of_week is specified, shows only that day. Otherwise, shows all days
-        in a grid layout.
+        as a single horizontal plot from Monday 12 AM to Sunday midnight.
 
         Parameters
         ----------
         day_of_week : str, optional
             Specific day to plot ('Monday', 'Tuesday', etc.). If None, plots all days.
+        route_codes : list[str], optional
+            Routes to include. If None, includes all routes.
 
         Examples
         --------
         >>> viz.plot_typical_day_profile('Monday')
         >>> viz.plot_typical_day_profile()  # All days
+        >>> viz.plot_typical_day_profile(route_codes=['2HM2+P8|XJV5+RG'])
         """
         # Ensure temporal features exist
         df = self._ensure_temporal_features(self.df)
 
-        # Determine which days to plot
+        days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
         if day_of_week:
-            days_to_plot = [day_of_week]
-        else:
-            days_to_plot = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
-        # Create subplots
-        n_days = len(days_to_plot)
-        if n_days == 1:
-            fig, axes = plt.subplots(1, 1, figsize=(12, 6))
-            axes = [axes]
-        else:
-            n_cols = 2
-            n_rows = (n_days + n_cols - 1) // n_cols
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows))
-            axes = axes.flatten() if n_days > 1 else [axes]
-
-        for idx, day in enumerate(days_to_plot):
-            ax = axes[idx]
-
-            # Filter data for this day
-            day_data = df[df['day_of_week'] == day]
+            # --- Single-day plot (unch behaviour) ---
+            fig, ax = plt.subplots(figsize=(12, 6), dpi=300)
+            day_data = df[df['day_of_week'] == day_of_week]
 
             if day_data.empty:
-                ax.text(0.5, 0.5, f'No data for {day}',
-                       ha='center', va='center', transform=ax.transAxes)
-                ax.set_xticks([])
-                ax.set_yticks([])
-                continue
+                ax.text(0.5, 0.5, f'No data for {day_of_week}',
+                        ha='center', va='center', transform=ax.transAxes)
+            else:
+                for route_code in self.routes:
+                    route_day_data = day_data[day_data['route_code'] == route_code]
+                    if route_day_data.empty:
+                        continue
+                    hourly_stats = route_day_data.groupby('hour')['avg_speed'].agg([
+                        ('mean', 'mean'), ('std', 'std')
+                    ]).reset_index()
+                    hourly_stats = hourly_stats.set_index('hour').reindex(range(24)).reset_index()
+                    route_color = self._get_route_color(route_code)
+                    route_label = self._get_route_label(route_code, 'short')
+                    ax.plot(hourly_stats['hour'], hourly_stats['mean'],
+                            color=route_color, linewidth=2, label=route_label, alpha=0.9)
+                    valid_mask = hourly_stats['mean'].notna()
+                    if valid_mask.any():
+                        hours = hourly_stats.loc[valid_mask, 'hour']
+                        means = hourly_stats.loc[valid_mask, 'mean']
+                        stds = hourly_stats.loc[valid_mask, 'std'].fillna(0)
+                        ax.fill_between(hours, means - stds, means + stds,
+                                        color=route_color, alpha=0.15, linewidth=0)
 
-            # Plot each route
-            for route_code in self.routes:
-                route_day_data = day_data[day_data['route_code'] == route_code]
-
-                if route_day_data.empty:
-                    continue
-
-                # Compute hourly statistics
-                hourly_stats = route_day_data.groupby('hour')['avg_speed'].agg([
-                    ('mean', 'mean'),
-                    ('std', 'std')
-                ]).reset_index()
-
-                # Ensure all hours are present
-                hourly_stats = hourly_stats.set_index('hour').reindex(range(24)).reset_index()
-
-                # Get route color and label
-                route_color = self._get_route_color(route_code)
-                route_label = self._get_route_label(route_code, 'short')
-
-                # Plot mean line
-                ax.plot(hourly_stats['hour'], hourly_stats['mean'],
-                       color=route_color, linewidth=2, label=route_label, alpha=0.9)
-
-                # Add variance band
-                valid_mask = hourly_stats['mean'].notna()
-                if valid_mask.any():
-                    hours = hourly_stats.loc[valid_mask, 'hour']
-                    means = hourly_stats.loc[valid_mask, 'mean']
-                    stds = hourly_stats.loc[valid_mask, 'std'].fillna(0)
-
-                    ax.fill_between(hours, means - stds, means + stds,
-                                   color=route_color, alpha=0.15, linewidth=0)
-
-            # Format subplot
             ax.set_xlabel('Hour of Day', fontsize=11, fontweight='bold')
             ax.set_ylabel('Avg Speed (km/h)', fontsize=11, fontweight='bold')
-            ax.set_title(f'{day}', fontsize=12, fontweight='bold')
+            ax.set_title(f'Typical Day Profile: {day_of_week}\n(Shaded regions show ±1 standard deviation)',
+                         fontsize=14, fontweight='bold', pad=15)
             ax.set_xticks(range(0, 24, 3))
             ax.set_xticklabels([self._format_hour_label(h) for h in range(0, 24, 3)],
-                              rotation=45, ha='right')
+                               rotation=45, ha='right')
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
-            ax.legend(loc='best', framealpha=0.9, fontsize=8)
+            plt.tight_layout()
+            plt.show()
+            return
 
-        # Hide extra subplots
-        for idx in range(n_days, len(axes)):
-            axes[idx].set_visible(False)
+        # --- All-days: single horizontal plot, Monday 12 AM → Sunday midnight ---
+        selected_routes = self.routes if route_codes is None else [r for r in self.routes if r in set(route_codes)]
 
-        # Add overall title
-        title = f'Typical Day Profile: {day_of_week}' if day_of_week else 'Typical Day Profiles: All Days'
-        fig.suptitle(title + '\n(Shaded regions show ±1 standard deviation)',
-                    fontsize=14, fontweight='bold', y=0.995)
+        if not selected_routes:
+            warnings.warn("No valid routes selected for typical day profile plot.")
+            return
 
-        plt.tight_layout(rect=[0, 0, 1, 0.99])
+        fig, ax = plt.subplots(figsize=(20, 14), dpi=150)
+
+        day_offset = {day: i * 24 for i, day in enumerate(days_of_week)}
+
+        for route_code in selected_routes:
+            route_data = df[df['route_code'] == route_code]
+            if route_data.empty:
+                continue
+
+            route_color = self._get_route_color(route_code)
+            route_label = self._get_route_label(route_code, 'short')
+
+            all_hours = []
+            all_means = []
+            all_stds = []
+
+            for day in days_of_week:
+                day_data = route_data[route_data['day_of_week'] == day]
+                if day_data.empty:
+                    all_hours.extend([day_offset[day] + h for h in range(24)])
+                    all_means.extend([np.nan] * 24)
+                    all_stds.extend([np.nan] * 24)
+                    continue
+                hourly_stats = day_data.groupby('hour')['avg_speed'].agg([
+                    ('mean', 'mean'), ('std', 'std')
+                ]).reset_index()
+                hourly_stats = hourly_stats.set_index('hour').reindex(range(24)).reset_index()
+                for h in range(24):
+                    all_hours.append(day_offset[day] + h)
+                    all_means.append(hourly_stats.loc[h, 'mean'])
+                    all_stds.append(hourly_stats.loc[h, 'std'])
+
+            all_hours = np.array(all_hours)
+            all_means = np.array(all_means, dtype=float)
+            all_stds = np.array(all_stds, dtype=float)
+
+            valid_mask = ~np.isnan(all_means)
+            if valid_mask.sum() >= 4:
+                vh = all_hours[valid_mask]
+                vm = all_means[valid_mask]
+                vs = np.nan_to_num(all_stds[valid_mask])
+                f_mean = interp1d(vh, vm, kind='cubic', bounds_error=False, fill_value='extrapolate')
+                f_std = interp1d(vh, vs, kind='linear', bounds_error=False, fill_value='extrapolate')
+                smooth_hours = np.linspace(vh.min(), vh.max(), len(vh) * 5)
+                smooth_means = f_mean(smooth_hours)
+                smooth_stds = f_std(smooth_hours)
+                ax.plot(smooth_hours, smooth_means,
+                        color=route_color, linewidth=2, label=route_label, alpha=0.9)
+                ax.fill_between(smooth_hours, smooth_means - smooth_stds, smooth_means + smooth_stds,
+                                color=route_color, alpha=0.12, linewidth=0)
+            else:
+                ax.plot(all_hours, all_means,
+                        color=route_color, linewidth=2, label=route_label, alpha=0.9)
+                if valid_mask.any():
+                    vh = all_hours[valid_mask]
+                    vm = all_means[valid_mask]
+                    vs = np.nan_to_num(all_stds[valid_mask])
+                    ax.fill_between(vh, vm - vs, vm + vs,
+                                    color=route_color, alpha=0.12, linewidth=0)
+
+        # X-axis: day boundaries with labels, hour ticks every 3 hours
+        ax.set_xlim(0, 168)
+        ax.set_xticks(range(0, 169, 3))
+        hour_labels = []
+        for tick in range(0, 169, 3):
+            day_idx = tick // 24
+            hour = tick % 24
+            if hour == 0 and day_idx < 7:
+                hour_labels.append(days_of_week[day_idx][:3])
+            else:
+                hour_labels.append(f'{hour:02d}')
+        ax.set_xticklabels(hour_labels, rotation=45, ha='right', fontsize=9)
+
+        # Vertical separators between days
+        for i in range(1, 7):
+            ax.axvline(x=i * 24, color='gray', linestyle='-', linewidth=0.8, alpha=0.5)
+
+        # Day name labels at the top of each day section
+        for i, day in enumerate(days_of_week):
+            ax.text(i * 24 + 12, 1.02, day, ha='center', va='bottom',
+                    fontsize=11, fontweight='bold',
+                    transform=ax.get_xaxis_transform(),
+                    bbox=dict(boxstyle='round,pad=0.2', facecolor='lightyellow',
+                              edgecolor='gray', alpha=0.7))
+
+        ax.set_xlabel('Day & Hour of Week', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Avg Speed (km/h)', fontsize=12, fontweight='bold')
+        ax.set_title('Typical Week Profile (Mon 12 AM → Sun Midnight)',
+                     fontsize=14, fontweight='bold', pad=80)
+        fig.text(0.5, 0.89, '(Shaded regions show ±1 standard deviation)',
+                 fontsize=11, fontweight='normal', ha='center', va='center')
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.set_axisbelow(True)
+
+        fig.subplots_adjust(left=0.05, right=0.98, top=0.82, bottom=0.15)
         plt.show()
 
     def plot_current_vs_predicted(self, route_code: str, reference_date: Optional[str] = None) -> None:
@@ -3085,147 +3148,128 @@ class VisualizationEngine:
                   f"{row['worst_speed']:>6.1f} km/h")
         print("=" * 80)
 
-    def create_route_selector(self) -> 'ipywidgets.SelectMultiple':
+    def create_route_checkbox_grid(self) -> dict:
         """
-        Create interactive route selector widget using ipywidgets.SelectMultiple.
+        Create an interactive route selection checkbox grid with select/deselect all toggle.
 
-        Returns a multi-select widget that allows users to select one or more
-        routes for filtering visualizations and analysis.
+        Returns a dict containing:
+        - ``output``: ipywidgets.Output for rendering plots
+        - ``controls``: HBox containing the toggle button
+        - ``grid``: GridBox of route checkboxes
+        - ``get_selected``: callable returning list of selected route codes
+        - ``render``: callable taking a plot_fn(selected_routes) -> None that renders into the output
 
-        Returns
-        -------
-        ipywidgets.SelectMultiple
-            Multi-select widget with all available routes
+        The ``render`` method wires up all checkbox/toggle event handlers automatically.
+        The caller only needs to provide ``plot_fn`` and display the widgets.
 
         Examples
         --------
-        >>> viz = VisualizationEngine(df, routes_df)
-        >>> route_selector = viz.create_route_selector()
-        >>> display(route_selector)
-        >>> # Access selected routes
-        >>> selected_routes = route_selector.value
+        >>> selector = viz.create_route_checkbox_grid()
+        >>> def plot_fn(routes):
+        ...     if routes:
+        ...         viz.plot_hour_of_day_profiles(routes)
+        >>> selector['render'](plot_fn)
+        >>> display(selector['output'], selector['controls'], selector['grid'])
         """
         import ipywidgets as widgets
-        
-        # Get route labels for display
-        route_options = []
+        from IPython.display import display, clear_output
+
+        route_checkboxes = []
+        route_items = []
         for route_code in self.routes:
-            label = self._get_route_label(route_code)
-            route_options.append((label, route_code))
-        
-        # Sort by label
-        route_options.sort(key=lambda x: x[0])
-        
-        # Create widget
-        selector = widgets.SelectMultiple(
-            options=route_options,
-            value=[self.routes[0]] if self.routes else [],
-            description='Routes:',
-            disabled=False,
-            layout=widgets.Layout(width='400px', height='200px'),
-            style={'description_width': '80px'}
+            color = self._get_route_color(route_code)
+            cb = widgets.Checkbox(
+                value=True,
+                description=self._get_route_label(route_code),
+                indent=False,
+                layout=widgets.Layout(width='auto')
+            )
+            route_checkboxes.append(cb)
+            swatch = widgets.HTML(
+                value=f'<div style="width:14px;height:14px;background-color:{color};'
+                      f'border:1px solid #555;border-radius:2px;display:inline-block;"></div>',
+                layout=widgets.Layout(margin='2px 4px 0 0')
+            )
+            route_items.append(
+                widgets.HBox([swatch, cb], layout=widgets.Layout(width='auto'))
+            )
+
+        select_toggle = widgets.Button(
+            description='Deselect all',
+            tooltip='Select all or deselect all routes',
+            button_style=''
         )
-        
-        return selector
 
-    def create_time_range_slider(self, start_date: Optional[str] = None, 
-                                 end_date: Optional[str] = None) -> 'ipywidgets.SelectionRangeSlider':
-        """
-        Create interactive time range slider widget using ipywidgets.
-
-        Returns a date range slider that allows users to select a time window
-        for filtering data in visualizations.
-
-        Parameters
-        ----------
-        start_date : str, optional
-            Start date in 'YYYY-MM-DD' format. If None, uses earliest date in data.
-        end_date : str, optional
-            End date in 'YYYY-MM-DD' format. If None, uses latest date in data.
-
-        Returns
-        -------
-        ipywidgets.SelectionRangeSlider
-            Date range slider widget
-
-        Examples
-        --------
-        >>> viz = VisualizationEngine(df, routes_df)
-        >>> time_slider = viz.create_time_range_slider()
-        >>> display(time_slider)
-        >>> # Access selected range
-        >>> start_idx, end_idx = time_slider.value
-        """
-        import ipywidgets as widgets
-        
-        # Ensure temporal features exist
-        df = self._ensure_temporal_features(self.df)
-        
-        # Get date range from data
-        if start_date is None:
-            start_date = df['timestamp'].min().strftime('%Y-%m-%d')
-        if end_date is None:
-            end_date = df['timestamp'].max().strftime('%Y-%m-%d')
-        
-        # Create list of dates
-        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-        date_labels = [d.strftime('%Y-%m-%d') for d in date_range]
-        
-        # Create widget
-        slider = widgets.SelectionRangeSlider(
-            options=date_labels,
-            index=(0, len(date_labels) - 1),
-            description='Date Range:',
-            disabled=False,
-            layout=widgets.Layout(width='600px'),
-            style={'description_width': '100px'}
+        checkbox_grid = widgets.GridBox(
+            children=route_items,
+            layout=widgets.Layout(
+                grid_template_columns='repeat(5, minmax(180px, 1fr))',
+                grid_gap='8px 16px',
+                width='100%'
+            )
         )
-        
-        return slider
 
-    def create_aggregation_toggle(self) -> 'ipywidgets.ToggleButtons':
-        """
-        Create interactive aggregation toggle widget using ipywidgets.ToggleButtons.
+        controls = widgets.HBox([select_toggle])
+        out = widgets.Output()
+        _updating = [False]
 
-        Returns a toggle button widget that allows users to switch between
-        different aggregation levels (hourly, daily, weekly).
+        def get_selected():
+            return [rc for rc, cb in zip(self.routes, route_checkboxes) if cb.value]
 
-        Returns
-        -------
-        ipywidgets.ToggleButtons
-            Toggle buttons for aggregation selection
+        def refresh_toggle_label():
+            count = sum(cb.value for cb in route_checkboxes)
+            if count == len(route_checkboxes):
+                select_toggle.description = 'Deselect all'
+            elif count == 0:
+                select_toggle.description = 'Select all'
+            else:
+                select_toggle.description = 'Select all'
 
-        Examples
-        --------
-        >>> viz = VisualizationEngine(df, routes_df)
-        >>> agg_toggle = viz.create_aggregation_toggle()
-        >>> display(agg_toggle)
-        >>> # Access selected aggregation
-        >>> aggregation = agg_toggle.value
-        """
-        import ipywidgets as widgets
-        
-        # Create widget
-        toggle = widgets.ToggleButtons(
-            options=[
-                ('Hourly', 'H'),
-                ('Daily', 'D'),
-                ('Weekly', 'W')
-            ],
-            value='D',
-            description='Aggregation:',
-            disabled=False,
-            button_style='',  # 'success', 'info', 'warning', 'danger' or ''
-            tooltips=[
-                'Aggregate by hour',
-                'Aggregate by day',
-                'Aggregate by week'
-            ],
-            layout=widgets.Layout(width='400px'),
-            style={'description_width': '100px', 'button_width': '100px'}
-        )
-        
-        return toggle
+        def make_render(plot_fn):
+            def render():
+                selected = get_selected()
+                with out:
+                    clear_output(wait=True)
+                    plot_fn(selected)
+                refresh_toggle_label()
+            return render
+
+        def on_checkbox_change(change, render_fn):
+            if _updating[0]:
+                return
+            if change['type'] == 'change' and change['name'] == 'value':
+                render_fn()
+
+        def on_toggle_click(_, render_fn):
+            if _updating[0]:
+                return
+            target = sum(cb.value for cb in route_checkboxes) != len(route_checkboxes)
+            _updating[0] = True
+            try:
+                for cb in route_checkboxes:
+                    cb.unobserve_all()
+                    cb.value = target
+                render_fn()
+            finally:
+                _updating[0] = False
+            # Re-attach observers after bulk update
+            for cb in route_checkboxes:
+                cb.observe(lambda ch, rf=render_fn: on_checkbox_change(ch, rf), names='value')
+
+        def render(plot_fn):
+            render_fn = make_render(plot_fn)
+            for cb in route_checkboxes:
+                cb.observe(lambda ch, rf=render_fn: on_checkbox_change(ch, rf), names='value')
+            select_toggle.on_click(lambda _, rf=render_fn: on_toggle_click(_, rf))
+            render_fn()
+
+        return {
+            'output': out,
+            'controls': controls,
+            'grid': checkbox_grid,
+            'get_selected': get_selected,
+            'render': render,
+        }
 
 
     def create_linked_plots(self, route_codes: Optional[List[str]] = None) -> 'plotly.graph_objs.Figure':
