@@ -1,14 +1,13 @@
 # requirements.txt — dependencies for all Jupyter notebooks in this repo
 #
-# Covers the three notebooks:
-#   traffic_analysis_examples.ipynb  (pandas, numpy, matplotlib, ipywidgets, IPython;
-#                                     imports local data_utils, traffic_analyzer, visualization_engine)
-#   traffic_snapshot.ipynb           (pandas, numpy, selenium, openlocationcode)
-#   traffic_visual.ipynb             (pandas, numpy, matplotlib, seaborn, scipy)
+# Covers the notebook:
+#   traffic_analysis_supreme.ipynb  (pandas, numpy, matplotlib, seaborn, sklearn,
+#                                    ipywidgets, IPython; imports local data_utils,
+#                                    traffic_analyzer, visualization_engine)
 #
 # Version constraints mirror pyproject.toml where the package is already declared;
 # scipy / mplcursors / ipython are added here because they are imported directly
-# by the notebooks or their local module dependencies (data_utils, traffic_analyzer,
+# by the notebook or its local module dependencies (data_utils, traffic_analyzer,
 # visualization_engine) but are absent from pyproject.toml.
 
 # --- Core data ---
@@ -25,10 +24,6 @@ mplcursors>=0.5.3
 # --- Statistics & machine learning ---
 scikit-learn>=1.8.0
 statsmodels>=0.14.6
-
-# --- Scraping & geocoding (traffic_snapshot) ---
-selenium>=4.35.0
-openlocationcode>=1.0.1
 
 # --- Jupyter / notebook runtime ---
 ipykernel>=6.30.1
