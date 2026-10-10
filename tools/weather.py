@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
-import requests
+from curl_cffi import requests
 from bs4 import BeautifulSoup
 
 import config_loader as cfg
@@ -47,11 +47,11 @@ _local = threading.local()
 def _get_session() -> requests.Session:
     """Return a thread-local session, primed with AccuWeather homepage to avoid 403 on follow-up pages."""
     if not getattr(_local, "session", None):
-        _local.session = requests.Session()
+        _local.session = requests.Session(impersonate="chrome")
         try:
             _local.session.get("https://www.accuweather.com/", headers=HEADERS, timeout=20)
             time.sleep(1)
-        except requests.RequestException:
+        except requests.RequestsError:
             pass
     return _local.session
 
@@ -59,7 +59,7 @@ def _get_session() -> requests.Session:
 def _get_with_retry(url: str, retries: int = 4, delay: float = 3.0) -> requests.Response:
     """GET with retry on 403/5xx, using follow-up headers and exponential back-off."""
     session = _get_session()
-    last_exc: Exception = requests.RequestException(f"No attempts made for {url}")
+    last_exc: Exception = requests.RequestsError(f"No attempts made for {url}")
     for attempt in range(retries):
         try:
             resp = session.get(url, headers=HEADERS_FOLLOWUP, timeout=20)
@@ -70,11 +70,7 @@ def _get_with_retry(url: str, retries: int = 4, delay: float = 3.0) -> requests.
                 resp.raise_for_status()
             resp.raise_for_status()
             return resp
-        except requests.HTTPError as e:
-            last_exc = e
-            if attempt < retries - 1:
-                time.sleep(2)
-        except requests.RequestException as e:
+        except requests.RequestsError as e:
             last_exc = e
             if attempt < retries - 1:
                 time.sleep(2)
@@ -317,19 +313,19 @@ def main() -> None:
         aqi_url = build_aqi_url(s["station"])
         try:
             data = extract_minute_weather(minute_url)
-        except requests.RequestException:
+        except requests.RequestsError:
             data = {k: None for k in ["rsi_flag", "rsi_forecast"]}
 
         try:
             current_data = extract_current_weather(current_url)
             data.update(current_data)
-        except requests.RequestException:
+        except requests.RequestsError:
             data.update({k: None for k in ["temp", "temp_flag", "realfeel", "realfeel_flag", "humidity"]})
 
         try:
             aqi_data = extract_aqi(aqi_url)
             data.update(aqi_data)
-        except requests.RequestException:
+        except requests.RequestsError:
             data.update({"aqi": None, "aqi_flag": None})
 
         data["route_code"] = s.get("route_code", "")
@@ -357,6 +353,11 @@ def main() -> None:
 
     # Preserve original station order
     rows = [rows_map[s["route_code"]] for s in stations if s["route_code"] in rows_map]
+
+    data_keys = ("temp", "realfeel", "humidity", "rsi_flag", "rsi_forecast", "aqi")
+    if rows and not any(any(r.get(k) for k in data_keys) for r in rows):
+        print("All stations returned no data — aborting without writing snapshot", file=sys.stderr)
+        sys.exit(1)
 
     write_snapshot_csv(rows, WEATHER_CSV_PATH)
     print(f"Wrote {WEATHER_CSV_PATH}", file=sys.stderr)
