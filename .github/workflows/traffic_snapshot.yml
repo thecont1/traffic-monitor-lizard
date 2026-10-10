@@ -44,6 +44,8 @@ jobs:
           echo "removed=$removed" >> "$GITHUB_OUTPUT"
 
       - name: Run weather snapshot
+        # Non-fatal: an AccuWeather outage must not lose the traffic snapshot.
+        continue-on-error: true
         if: >-
           ${{
             inputs.job_type == 'snapshot'
