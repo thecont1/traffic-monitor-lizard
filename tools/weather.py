@@ -356,7 +356,8 @@ def main() -> None:
 
     data_keys = ("temp", "realfeel", "humidity", "rsi_flag", "rsi_forecast", "aqi")
     if rows and not any(any(r.get(k) for k in data_keys) for r in rows):
-        print("All stations returned no data — aborting without writing snapshot", file=sys.stderr)
+        print("All stations returned no data — removing stale snapshot and aborting", file=sys.stderr)
+        WEATHER_CSV_PATH.unlink(missing_ok=True)
         sys.exit(1)
 
     write_snapshot_csv(rows, WEATHER_CSV_PATH)

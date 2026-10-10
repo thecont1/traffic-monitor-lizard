@@ -29,6 +29,7 @@ def _run_main(monkeypatch, tmp_path, stations, **extractors):
 class TestNoDataAbort:
     def test_aborts_when_all_stations_empty(self, monkeypatch, tmp_path):
         out = tmp_path / "weather.csv"
+        out.write_text("stale,snapshot\n")
         _run_main(monkeypatch, tmp_path, [_station()])
         with pytest.raises(SystemExit) as exc:
             weather.main()
