@@ -17,7 +17,7 @@ profile_default/
 ipython_config.py
 
 # pyenv
-.python-version
+# .python-version is tracked: it pins the interpreter for uv/CI
 
 # Environments
 .env
