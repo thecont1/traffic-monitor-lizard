@@ -511,6 +511,23 @@ def test_an_open_late_hours_night_keeps_the_slots_it_has():
     assert closed[closed["date"] == FRIDAY].iloc[0]["status"] == STATUS_INCOMPLETE_WINDOW
 
 
+def test_a_missing_first_slot_is_a_coverage_gap_not_an_empty_day():
+    """An open window whose first slot is missing still has readings."""
+    evening = WINDOW_BY_TOD["weekday_evening"]
+    obs = prepare_observations(frame(day_rows(FRIDAY, {19: 40.0})))
+
+    result = generate_anomaly_records(obs, as_of=f"{FRIDAY}T20:30", specs=[evening])
+    row = result[result["date"] == FRIDAY].iloc[0]
+    assert row["status"] == STATUS_INCOMPLETE_WINDOW
+    assert decode_hourly_slot_mask(row["observed_slot_mask"]) == (19,)
+
+    # Readings only outside the window produce no row at all: the calendar
+    # reads a missing row as "no observations", not as a coverage failure.
+    elsewhere = prepare_observations(frame(day_rows(FRIDAY, {9: 30.0})))
+    empty = generate_anomaly_records(elsewhere, as_of=f"{FRIDAY}T20:30", specs=[evening])
+    assert empty.empty
+
+
 def test_a_complete_24_hour_window_stays_final_before_it_closes():
     """A 24-hour window closes at midnight but is done when its last slot lands.
 
@@ -526,7 +543,9 @@ def test_a_complete_24_hour_window_stays_final_before_it_closes():
     rows += day_rows(thursday, {h: 45.0 for h in range(24)})
     obs = prepare_observations(frame(rows))
 
-    result = generate_anomaly_records(obs, as_of=f"{FRIDAY}T00:30", specs=[full_day])
+    # Still open at 23:30 (it closes at midnight), so this exercises the
+    # in-progress branch rather than the already-closed one.
+    result = generate_anomaly_records(obs, as_of=f"{thursday}T23:30", specs=[full_day])
     row = result[result["date"] == thursday].iloc[0]
     assert row["status"] == STATUS_FINAL
     assert decode_hourly_slot_mask(row["observed_slot_mask"]) == tuple(range(24))

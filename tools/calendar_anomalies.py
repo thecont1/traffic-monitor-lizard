@@ -593,6 +593,11 @@ def _in_progress_status(
             break
 
     if not prefix:
+        # A reading exists but the window's first scheduled slot has none: that
+        # is a coverage gap, not a day with nothing observed. Reporting
+        # no_observations here would tell the UI the feed was empty.
+        if observed:
+            return STATUS_INCOMPLETE_WINDOW, ()
         return STATUS_NO_OBSERVATIONS, ()
 
     # Any reading outside the contiguous prefix (e.g. a gap at 19:00 with
