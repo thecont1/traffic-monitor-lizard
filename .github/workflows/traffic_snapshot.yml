@@ -69,6 +69,14 @@ jobs:
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
+      - name: Generate calendar anomaly export
+        # Derived from the traffic CSV, so it runs after both the snapshot and
+        # the dedup path. Non-fatal: a scorer failure must not discard the
+        # collected traffic data — the frontend shows an explicit unavailable
+        # state when the export is missing or stale.
+        continue-on-error: true
+        run: uv run python tools/generate_calendar_exports.py
+
       - name: Compose commit message
         id: commit_message
         run: |
@@ -89,7 +97,8 @@ jobs:
           rm -f weather.md weather_snapshot.csv
 
           # Stage outputs to commit them (include uv.lock — uv rewrites it on every run)
-          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv uv.lock || true
+          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv \
+                  data/csv-calendar-anomalies-bangalore.csv uv.lock || true
 
           if git diff --cached --quiet; then
             echo "No changes"
