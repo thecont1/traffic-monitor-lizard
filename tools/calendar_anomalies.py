@@ -657,8 +657,18 @@ def score_series(
             rows.append(row)
             continue
 
-        if day_date == today and as_of < spec.window_end_at(day_key):
+        # In progress means "the window has not closed yet", not "the window
+        # belongs to today". A late_hours window opens at 22:00 and closes at
+        # 05:00 the next morning, so after midnight it still belongs to
+        # yesterday's row; keying this on the date left that row reporting a
+        # hard incomplete_window for hours while its slots were still arriving.
+        if as_of < spec.window_end_at(day_key):
             status, compare_slots = _in_progress_status(spec, day, as_of)
+            if status == STATUS_INCOMPLETE_WINDOW and day.covers(spec.hours):
+                # Nothing is left to wait for. A 24-hour window is complete the
+                # moment its last slot is observed, hours before it closes, and
+                # such a window has no provisional colour to fall back on.
+                status, compare_slots = STATUS_FINAL, tuple(spec.hours)
         elif day.covers(spec.hours):
             status, compare_slots = STATUS_FINAL, tuple(spec.hours)
         else:

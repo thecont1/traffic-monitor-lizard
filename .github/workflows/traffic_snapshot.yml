@@ -107,9 +107,26 @@ jobs:
           git rm --cached --ignore-unmatch weather.md weather_snapshot.csv || true
           rm -f weather.md weather_snapshot.csv
 
-          # Stage outputs to commit them (include uv.lock — uv rewrites it on every run)
-          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv \
-                  data/csv-calendar-anomalies-bangalore.csv uv.lock || true
+          # Stage outputs to commit them (include uv.lock — uv rewrites it on
+          # every run). git add fails the whole invocation when a pathspec
+          # matches nothing, and the `|| true` that used to paper over that
+          # meant one absent output silently dropped every output — including
+          # the collected traffic. Stage each path on its own instead: present
+          # files plainly, absent ones only when git already tracks them, so an
+          # intentional removal (a withdrawn calendar export) is recorded as a
+          # deletion rather than being skipped.
+          for path in data/csv-traffic-bangalore.csv \
+                      data/csv-weather-snapshot.csv \
+                      data/csv-calendar-anomalies-bangalore.csv \
+                      uv.lock; do
+            if [ -e "$path" ]; then
+              git add -- "$path"
+            elif git ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+              git add -u -- "$path"
+            else
+              echo "skipping untracked absent path: $path"
+            fi
+          done
 
           if git diff --cached --quiet; then
             echo "No changes"

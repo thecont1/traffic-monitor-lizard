@@ -490,6 +490,48 @@ def test_late_hours_does_not_merge_saturday_night_into_friday_night():
     assert tuple(days[saturday].minutes_by_hour) == (22, 23)  # its 00–04 belong to Friday
 
 
+def test_an_open_late_hours_night_keeps_the_slots_it_has():
+    """After midnight the window is still open, though the row's date is past.
+
+    v1 grants a provisional colour to the evening window only, so an open night
+    still reports incomplete — but it must report the slots it has collected,
+    including the after-midnight ones, rather than an empty window.
+    """
+    late = WINDOW_BY_TOD["late_hours"]
+    saturday = (date.fromisoformat(FRIDAY) + timedelta(days=1)).isoformat()
+    rows = day_rows(FRIDAY, {22: 20.0, 23: 20.0}) + day_rows(saturday, {0: 21.0})
+    obs = prepare_observations(frame(rows))
+
+    during = generate_anomaly_records(obs, as_of=f"{saturday}T01:00", specs=[late])
+    friday = during[during["date"] == FRIDAY].iloc[0]
+    assert friday["status"] == STATUS_INCOMPLETE_WINDOW
+    assert decode_hourly_slot_mask(friday["observed_slot_mask"]) == (0, 22, 23)
+
+    closed = generate_anomaly_records(obs, as_of=f"{saturday}T06:00", specs=[late])
+    assert closed[closed["date"] == FRIDAY].iloc[0]["status"] == STATUS_INCOMPLETE_WINDOW
+
+
+def test_a_complete_24_hour_window_stays_final_before_it_closes():
+    """A 24-hour window closes at midnight but is done when its last slot lands.
+
+    Evaluating on the window rather than "is this today" must not punish a
+    bucket that has no provisional colour to fall back on.
+    """
+    full_day = WINDOW_BY_TOD["all"]
+    thursday = (date.fromisoformat(FRIDAY) - timedelta(days=1)).isoformat()
+    rows = []
+    for weeks_ago in range(1, 10):  # enough comparable Thursdays to colour
+        prior = (date.fromisoformat(thursday) - timedelta(weeks=weeks_ago)).isoformat()
+        rows += day_rows(prior, {h: 30.0 for h in range(24)})
+    rows += day_rows(thursday, {h: 45.0 for h in range(24)})
+    obs = prepare_observations(frame(rows))
+
+    result = generate_anomaly_records(obs, as_of=f"{FRIDAY}T00:30", specs=[full_day])
+    row = result[result["date"] == thursday].iloc[0]
+    assert row["status"] == STATUS_FINAL
+    assert decode_hourly_slot_mask(row["observed_slot_mask"]) == tuple(range(24))
+
+
 def test_late_hours_window_completes_on_the_next_civil_day():
     late = WINDOW_BY_TOD["late_hours"]
     saturday = (date.fromisoformat(FRIDAY) + timedelta(days=1)).isoformat()
