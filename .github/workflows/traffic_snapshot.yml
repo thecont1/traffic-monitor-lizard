@@ -69,6 +69,25 @@ jobs:
           echo "$message"
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
+      - name: Generate calendar anomaly export
+        id: calendar_export
+        # Derived from the traffic CSV, so it runs after both the snapshot and
+        # the dedup path. Non-fatal: a scorer failure must not discard the
+        # collected traffic data.
+        continue-on-error: true
+        run: uv run python tools/generate_calendar_exports.py
+
+      - name: Withdraw the stale calendar export when generation failed
+        # The export is derived data, and the commit step below re-stages it, so
+        # a failed run would otherwise keep publishing yesterday's colours as if
+        # they were current. Removing the file makes the failure visible: the
+        # dashboard renders an explicit "comparisons unavailable" state instead.
+        # The commit step stays ungated so the collected traffic is still saved.
+        if: steps.calendar_export.outcome == 'failure'
+        run: |
+          rm -f data/csv-calendar-anomalies-bangalore.csv
+          echo "::warning title=Calendar export failed::Removed the stale export; the dashboard will report comparisons unavailable until the next successful run."
+
       - name: Compose commit message
         id: commit_message
         run: |
@@ -88,8 +107,26 @@ jobs:
           git rm --cached --ignore-unmatch weather.md weather_snapshot.csv || true
           rm -f weather.md weather_snapshot.csv
 
-          # Stage outputs to commit them (include uv.lock — uv rewrites it on every run)
-          git add data/csv-traffic-bangalore.csv data/csv-weather-snapshot.csv uv.lock || true
+          # Stage outputs to commit them (include uv.lock — uv rewrites it on
+          # every run). git add fails the whole invocation when a pathspec
+          # matches nothing, and the `|| true` that used to paper over that
+          # meant one absent output silently dropped every output — including
+          # the collected traffic. Stage each path on its own instead: present
+          # files plainly, absent ones only when git already tracks them, so an
+          # intentional removal (a withdrawn calendar export) is recorded as a
+          # deletion rather than being skipped.
+          for path in data/csv-traffic-bangalore.csv \
+                      data/csv-weather-snapshot.csv \
+                      data/csv-calendar-anomalies-bangalore.csv \
+                      uv.lock; do
+            if [ -e "$path" ]; then
+              git add -- "$path"
+            elif git ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+              git add -u -- "$path"
+            else
+              echo "skipping untracked absent path: $path"
+            fi
+          done
 
           if git diff --cached --quiet; then
             echo "No changes"
@@ -104,6 +141,29 @@ jobs:
           git push origin HEAD:main || {
             echo "Push rejected — rebasing on remote changes..."
             git fetch origin main
-            git rebase origin/main -X ours
+            # -X ours prefers origin/main for content conflicts: during a rebase
+            # "ours" is the upstream side. A withdrawn calendar export conflicts
+            # differently — the commit deletes a file the remote modified, and a
+            # modify/delete conflict stops the rebase with a nonzero exit that
+            # would otherwise abort the step before the push, dropping the
+            # collected traffic. The rebase failure is therefore expected and
+            # handled: resolve, continue, then push.
+            if ! git rebase origin/main -X ours; then
+              export GIT_EDITOR=true
+              if git ls-files --unmerged --error-unmatch -- data/csv-calendar-anomalies-bangalore.csv >/dev/null 2>&1; then
+                echo "calendar export withdrew locally; keeping the removal"
+                git rm -q -f -- data/csv-calendar-anomalies-bangalore.csv
+              fi
+              for path in $(git diff --name-only --diff-filter=U); do
+                echo "other conflict on $path — keeping the origin/main version"
+                git checkout origin/main -- "$path"
+                git add -- "$path"
+              done
+              if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+                echo "unresolved conflicts remain; refusing to push" >&2
+                exit 1
+              fi
+              git rebase --continue
+            fi
             git push --force-with-lease origin HEAD:main
           }
