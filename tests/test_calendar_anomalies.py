@@ -422,20 +422,70 @@ def test_window_boundaries_match_frontend_filters():
     assert WINDOW_BY_TOD["weekends"].hours == tuple(range(24))
 
 
-def test_late_hours_window_completes_on_the_next_civil_day():
-    rows = flat_friday_history(12, 30.0)
-    late = day_rows(FRIDAY, {22: 20.0, 23: 20.0, 0: 20.0, 1: 20.0, 2: 20.0, 3: 20.0, 4: 20.0})
-    # Re-date the after-midnight readings onto the following civil day so they
-    # land at 00:00–04:00 of the window that opened at 22:00.
-    rows = [r for r in rows if r[0] != FRIDAY] + late
+def test_late_hours_night_groups_the_readings_around_midnight():
+    """22:00–23:00 Friday + 00:00–04:00 Saturday is one Friday night.
 
+    The readings keep their real source dates: the after-midnight slots belong
+    to the night that opened at 22:00 on Friday, not to Saturday's own night.
+    """
+    late = WINDOW_BY_TOD["late_hours"]
+    saturday = (date.fromisoformat(FRIDAY) + timedelta(days=1)).isoformat()
+
+    rows = day_rows(FRIDAY, {22: 20.0, 23: 20.0})
+    rows += day_rows(saturday, {0: 21.0, 1: 21.0, 2: 21.0, 3: 21.0, 4: 21.0})
+
+    days = build_day_observations(build_slot_table(prepare_observations(frame(rows))), late)
+
+    assert set(days) == {FRIDAY}, "the after-midnight readings must not form their own day"
+    night = days[FRIDAY]
+    assert night.weekday == 4  # Friday, derived from the date the window opened
+    assert tuple(night.minutes_by_hour) == late.hours
+    assert night.covers(late.hours)
+    # Each hour keeps its own median: 20 before midnight, 21 after.
+    assert night.minutes_by_hour[22] == 20.0
+    assert night.minutes_by_hour[0] == 21.0
+
+
+def test_late_hours_does_not_merge_saturday_night_into_friday_night():
+    """Saturday's own 22:00 readings must stay a separate night."""
+    late = WINDOW_BY_TOD["late_hours"]
+    saturday = (date.fromisoformat(FRIDAY) + timedelta(days=1)).isoformat()
+
+    rows = day_rows(FRIDAY, {22: 20.0, 23: 20.0})
+    rows += day_rows(saturday, {0: 21.0, 1: 21.0, 2: 21.0, 3: 21.0, 4: 21.0})
+    rows += day_rows(saturday, {22: 30.0, 23: 30.0})
+
+    days = build_day_observations(build_slot_table(prepare_observations(frame(rows))), late)
+    assert set(days) == {FRIDAY, saturday}
+    assert days[FRIDAY].minutes_by_hour[22] == 20.0
+    assert days[saturday].minutes_by_hour[22] == 30.0
+    assert tuple(days[saturday].minutes_by_hour) == (22, 23)  # its 00–04 belong to Friday
+
+
+def test_late_hours_window_completes_on_the_next_civil_day():
+    late = WINDOW_BY_TOD["late_hours"]
+    saturday = (date.fromisoformat(FRIDAY) + timedelta(days=1)).isoformat()
+    rows = day_rows(FRIDAY, {22: 20.0, 23: 20.0})
+    rows += day_rows(saturday, {0: 21.0, 1: 21.0, 2: 21.0, 3: 21.0, 4: 21.0})
     obs = prepare_observations(frame(rows))
-    result = generate_anomaly_records(
-        obs, as_of=f"{FRIDAY}T23:30", specs=[WINDOW_BY_TOD["late_hours"]], route_codes=["R1"]
+
+    # 23:30 on Friday: the window is still open, so only the two started slots count.
+    during = generate_anomaly_records(
+        obs, as_of=f"{FRIDAY}T23:30", specs=[late], route_codes=["R1"]
     )
-    today = result[result["date"] == FRIDAY].iloc[0]
-    assert today["status"] == STATUS_INCOMPLETE_WINDOW  # window ends 05:00 next day
-    assert decode_hourly_slot_mask(today["observed_slot_mask"]) == (0, 1, 2, 3, 4, 22, 23)
+    friday = during[during["date"] == FRIDAY].iloc[0]
+    assert friday["status"] == STATUS_INCOMPLETE_WINDOW
+    assert decode_hourly_slot_mask(friday["observed_slot_mask"]) == (22, 23)
+
+    # 05:30 the next morning: the same Friday night is complete, seven slots.
+    after = generate_anomaly_records(
+        obs, as_of=f"{saturday}T05:30", specs=[late], route_codes=["R1"]
+    )
+    friday = after[after["date"] == FRIDAY].iloc[0]
+    assert decode_hourly_slot_mask(friday["observed_slot_mask"]) == (0, 1, 2, 3, 4, 22, 23)
+    assert friday["observed_minutes"] == pytest.approx((20 * 2 + 21 * 5) / 7, abs=0.01)
+    # No comparable late-night history in this fixture, so no colour is claimed.
+    assert friday["status"] == STATUS_INSUFFICIENT_HISTORY
 
 
 # ── Export contract ──────────────────────────────────────────────────────
@@ -571,6 +621,48 @@ def test_window_filter_does_not_change_the_category_of_an_in_window_day():
     wide_row = wide[wide["date"] == FRIDAY].iloc[0]
     for column in ("category", "status", "typical_minutes", "delta_minutes", "rank_score", "reference_days"):
         assert tight_row[column] == wide_row[column], column
+
+
+def test_audit_uses_the_in_progress_prefix_when_history_is_insufficient():
+    """The audit must explain the comparison that was actually scored.
+
+    Today at 19:30 has a valid two-slot prefix but only seven comparable
+    Fridays, so the record ends up insufficient_history. The slots used for the
+    comparison are still the prefix, and the audit has to report those — with
+    the same seven reference dates the record counted.
+    """
+    rows: list[tuple] = []
+    for prior in prior_fridays(7):          # below MIN_HISTORY_DAYS
+        rows += day_rows(prior, {18: 30.0, 19: 30.0})
+    rows += day_rows(FRIDAY, {18: 44.0, 19: 45.0})
+
+    payload = build_audit_payload(
+        prepare_observations(frame(rows)),
+        route_code="R1",
+        target_date=FRIDAY,
+        tod="weekday_evening",
+        as_of=f"{FRIDAY}T19:30",
+    )
+
+    assert payload["record"]["status"] == STATUS_INSUFFICIENT_HISTORY
+    assert payload["compared_slots"] == [18, 19]
+    assert len(payload["reference_dates"]) == 7
+    assert int(payload["record"]["reference_days"]) == 7
+    assert {s["minutes"] for s in payload["reference_summaries"]} == {30.0}
+
+
+def test_audit_keeps_the_full_window_for_a_completed_day():
+    """A completed day is audited against every slot it was scored on."""
+    rows = flat_friday_history(12, 30.0) + day_rows(FRIDAY, {h: 45.0 for h in SLOTS})
+    payload = build_audit_payload(
+        prepare_observations(frame(rows)),
+        route_code="R1",
+        target_date=FRIDAY,
+        tod="weekday_evening",
+        as_of=night_before(FRIDAY),
+    )
+    assert payload["compared_slots"] == list(SLOTS)
+    assert len(payload["reference_dates"]) == 12
 
 
 def test_audit_payload_reconstructs_the_category():

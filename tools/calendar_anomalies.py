@@ -353,7 +353,23 @@ def build_day_observations(
     if slot_table.empty:
         return {}
 
-    sub = slot_table[slot_table["hour"].isin(set(spec.hours))]
+    sub = slot_table[slot_table["hour"].isin(set(spec.hours))].copy()
+
+    # A window that opens late spans midnight: ``late_hours`` runs 22:00 → 04:00
+    # the next morning, so its after-midnight slots belong to the night that
+    # began on the previous civil date. Without this rollback the 00:00–04:00
+    # slots would be grouped with that same date's 22:00–23:00 readings — i.e.
+    # two different nights merged into one day, and no night ever complete.
+    start_hour = spec.hours[0]
+    if start_hour > 0 and not sub.empty:
+        wrapped = sub["hour"] < start_hour
+        if bool(wrapped.any()):
+            overnight = sub[wrapped].copy()
+            opened_on = [parse_civil_date(d) - timedelta(days=1) for d in overnight["date"]]
+            overnight["date"] = [d.isoformat() for d in opened_on]
+            overnight["weekday"] = [d.weekday() for d in opened_on]
+            sub = pd.concat([sub[~wrapped], overnight], ignore_index=True)
+
     days: dict[str, DayObservation] = {}
     for date_key, group in sub.groupby("date", sort=True):
         weekday = int(group["weekday"].iloc[0])
@@ -956,13 +972,21 @@ def build_audit_payload(
     record = next(r for r in rows if r["date"] == target_date)
 
     day = days[target_date]
+    # Mirror the scorer's slot selection, which depends on *when* the day is
+    # being evaluated — not on the status that comes out the other end. An
+    # in-progress day with a valid prefix scores against that prefix even when
+    # the outcome is insufficient_history (fewer than MIN_HISTORY_DAYS matching
+    # references), so the audit must use the same slots or its reference_dates
+    # and reference_summaries would describe a different comparison.
     compare_slots = tuple(spec.hours)
-    if record["status"] == STATUS_PROVISIONAL:
-        compare_slots = tuple(
-            h
-            for h in spec.hours
-            if h in decode_hourly_slot_mask(str(record["observed_slot_mask"]))
-        )
+    in_progress = (
+        parse_civil_date(target_date) == as_of_dt.date()
+        and as_of_dt < spec.window_end_at(target_date)
+    )
+    if in_progress:
+        _, prefix = _in_progress_status(spec, day, as_of_dt)
+        if prefix:
+            compare_slots = prefix
 
     by_weekday: dict[int, list[str]] = defaultdict(list)
     for d in sorted(days):

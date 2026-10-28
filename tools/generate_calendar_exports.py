@@ -26,7 +26,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -173,7 +175,25 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("ERROR: no anomaly records produced")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    records.to_csv(args.output, index=False, na_rep="")
+    # Write-then-rename: the export is committed by CI, so a half-written file
+    # must never replace a good one. The temporary file lives beside the target
+    # so the rename stays atomic on the same filesystem.
+    handle = tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        newline="",
+        prefix=f".{args.output.name}.",
+        suffix=".tmp",
+        dir=args.output.parent,
+        delete=False,
+    )
+    try:
+        with handle:
+            records.to_csv(handle, index=False, na_rep="")
+        os.replace(handle.name, args.output)
+    except BaseException:
+        Path(handle.name).unlink(missing_ok=True)
+        raise
 
     if not args.quiet:
         status_counts = records["status"].value_counts().to_dict()

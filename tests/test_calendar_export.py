@@ -77,6 +77,37 @@ def exported(tmp_path: Path) -> list[dict[str, str]]:
     return list(csv.DictReader(text.splitlines()))
 
 
+def test_failed_write_leaves_the_previous_export_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The export is committed by CI; a half-written file must never land."""
+    traffic = tmp_path / "traffic.csv"
+    write_traffic_csv(traffic)
+    out = tmp_path / "csv-calendar-anomalies-bangalore.csv"
+    out.write_text("previous export\n", encoding="utf-8")
+
+    def explode(*args: object, **kwargs: object) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr("pandas.DataFrame.to_csv", explode)
+
+    with pytest.raises(OSError):
+        main(
+            [
+                "--traffic-csv", str(traffic),
+                "--routes-csv", str(tmp_path / "missing-routes.csv"),
+                "--output", str(out),
+                "--as-of", "2026-10-24T00:30",
+                "--tod", "weekday_evening",
+                "--quiet",
+            ]
+        )
+
+    assert out.read_text(encoding="utf-8") == "previous export\n"
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name.startswith(f".{out.name}")]
+    assert leftovers == [], f"temporary files left behind: {leftovers}"
+
+
 def test_header_is_the_documented_contract(exported: list[dict[str, str]]) -> None:
     assert list(exported[0].keys()) == list(EXPORT_COLUMNS)
 

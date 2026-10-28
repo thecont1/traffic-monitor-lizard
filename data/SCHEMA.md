@@ -139,7 +139,7 @@ as the archive grows.
 | `route_code` | `string` | Journey identity, including direction. Never a display label |
 | `route_definition_version` | `string` | Blank while no route-geometry version exists upstream |
 | `date` | `date` (ISO 8601) | City-local civil date, not a viewer-local date |
-| `tod_bucket` | `string` | `weekday_morning`, `weekday_afternoon`, `weekday_evening`, `weekends`, `late_hours`, `all` |
+| `tod_bucket` | `string` | `weekday_morning`, `weekday_afternoon`, `weekday_evening`, `weekends`, `late_hours`, `all`. `late_hours` is one night, 22:00 → 04:00 the next morning: the row's `date` is the evening it opened, so its 00:00–04:00 slots come from the following civil date and the weekday is that of `date` |
 | `city_timezone` | `string` | `Asia/Kolkata`; the zone all civil dates and weekdays are anchored to |
 | `method_version` | `string` | `calendar-anomaly-v1`; a viewer must refuse unknown versions |
 | `reference_class` | `string` | `same_weekday` — the cohort is weekday-matched |
