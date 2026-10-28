@@ -212,18 +212,33 @@ def city_now() -> datetime:
 
 
 def parse_as_of(value: str | datetime | None) -> datetime:
-    """Parse an ``--as-of`` value as a naive city-local datetime."""
+    """Parse ``--as-of`` as a naive city-local datetime.
+
+    Accepts an ISO date, an ISO datetime, or an offset-bearing timestamp. A
+    timestamp carrying a zone is converted to the city timezone before its
+    tzinfo is dropped, so the evaluation moment means the same instant whoever
+    runs it. Anything unparseable raises ``ValueError``: falling back to
+    midnight would silently shift an evaluation by up to a day, and a typo like
+    ``2026-10-24T25:00`` must not become a valid midnight.
+    """
     if value is None:
         return city_now()
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None)
-    text = str(value).strip()
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("--as-of is empty; expected an ISO date or datetime")
         try:
-            return datetime.strptime(text, fmt)
-        except ValueError:
-            continue
-    return datetime.combine(parse_civil_date(text), datetime.min.time())
+            parsed = datetime.fromisoformat(text)
+        except ValueError as exc:
+            raise ValueError(
+                f"cannot parse --as-of {text!r} as an ISO date or datetime"
+            ) from exc
+
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(ZoneInfo(CITY_TIMEZONE)).replace(tzinfo=None)
+    return parsed
 
 
 # ============================================================================

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 import pytest
@@ -39,6 +39,7 @@ from calendar_anomalies import (
     decode_hourly_slot_mask,
     generate_anomaly_records,
     hourly_slot_mask,
+    parse_as_of,
     prepare_observations,
     smoothed_mid_rank,
 )
@@ -422,6 +423,33 @@ def test_window_boundaries_match_frontend_filters():
     assert WINDOW_BY_TOD["weekends"].hours == tuple(range(24))
 
 
+def test_parse_as_of_converts_an_offset_timestamp_to_city_time():
+    """The evaluation moment is an instant, not a wall clock in some other zone."""
+    assert parse_as_of("2026-10-24T01:30:00+05:30") == datetime(2026, 10, 24, 1, 30)
+    # 20:00 UTC on the 23rd is 01:30 the next morning in Kolkata.
+    assert parse_as_of("2026-10-23T20:00:00Z") == datetime(2026, 10, 24, 1, 30)
+    # The same instant handed over as a tz-aware object must agree.
+    assert parse_as_of(datetime(2026, 10, 23, 20, 0, tzinfo=timezone.utc)) == datetime(
+        2026, 10, 24, 1, 30
+    )
+
+
+def test_parse_as_of_keeps_a_plain_date_and_naive_timestamp():
+    assert parse_as_of("2026-10-24") == datetime(2026, 10, 24, 0, 0)
+    assert parse_as_of("2026-10-24T18:45") == datetime(2026, 10, 24, 18, 45)
+    assert parse_as_of(datetime(2026, 10, 24, 18, 45)) == datetime(2026, 10, 24, 18, 45)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["", "   ", "yesterday", "24/10/2026", "2026-13-45", "2026-10-24T25:00", "2026-10-24T18:45+99:00"],
+)
+def test_parse_as_of_rejects_unparseable_values(bad):
+    """A typo must not silently become midnight — that moves a day by hours."""
+    with pytest.raises(ValueError):
+        parse_as_of(bad)
+
+
 def test_late_hours_night_groups_the_readings_around_midnight():
     """22:00–23:00 Friday + 00:00–04:00 Saturday is one Friday night.
 
@@ -520,8 +548,16 @@ def test_export_is_deterministic_for_unchanged_inputs():
     rows += day_rows(FRIDAY, {h: 45.0 for h in SLOTS})
     obs = prepare_observations(frame(rows))
 
-    first = generate_anomaly_records(obs, as_of=night_before(FRIDAY), specs=[EVENING])
-    second = generate_anomaly_records(obs, as_of=night_before(FRIDAY), specs=[EVENING])
+    # generated_at defaults to the wall clock at second precision, so two calls
+    # straddling a second boundary would differ there and nowhere else. Pin it:
+    # the point of the test is that the scores are reproducible.
+    stamped = datetime(2026, 10, 23, 20, 0)
+    first = generate_anomaly_records(
+        obs, as_of=night_before(FRIDAY), specs=[EVENING], generated_at=stamped
+    )
+    second = generate_anomaly_records(
+        obs, as_of=night_before(FRIDAY), specs=[EVENING], generated_at=stamped
+    )
     pd.testing.assert_frame_equal(first, second)
 
 

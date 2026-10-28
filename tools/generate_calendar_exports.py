@@ -163,13 +163,18 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"ERROR: unknown --tod values {unknown}")
         specs = tuple(WINDOW_BY_TOD[t] for t in args.tod)
 
-    records = generate_anomaly_records(
-        observations,
-        as_of=args.as_of,
-        specs=specs,
-        route_codes=args.route,
-        source_revision=file_digest(args.traffic_csv),
-    )
+    try:
+        records = generate_anomaly_records(
+            observations,
+            as_of=args.as_of,
+            specs=specs,
+            route_codes=args.route,
+            source_revision=file_digest(args.traffic_csv),
+        )
+    except ValueError as exc:
+        # Same contract as the audit path: a bad --as-of is a usage error, not
+        # a traceback.
+        raise SystemExit(f"ERROR: {exc}") from exc
 
     if records.empty:
         raise SystemExit("ERROR: no anomaly records produced")

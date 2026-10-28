@@ -70,12 +70,23 @@ jobs:
           echo "message=$message" >> "$GITHUB_OUTPUT"
 
       - name: Generate calendar anomaly export
+        id: calendar_export
         # Derived from the traffic CSV, so it runs after both the snapshot and
         # the dedup path. Non-fatal: a scorer failure must not discard the
-        # collected traffic data — the frontend shows an explicit unavailable
-        # state when the export is missing or stale.
+        # collected traffic data.
         continue-on-error: true
         run: uv run python tools/generate_calendar_exports.py
+
+      - name: Withdraw the stale calendar export when generation failed
+        # The export is derived data, and the commit step below re-stages it, so
+        # a failed run would otherwise keep publishing yesterday's colours as if
+        # they were current. Removing the file makes the failure visible: the
+        # dashboard renders an explicit "comparisons unavailable" state instead.
+        # The commit step stays ungated so the collected traffic is still saved.
+        if: steps.calendar_export.outcome == 'failure'
+        run: |
+          rm -f data/csv-calendar-anomalies-bangalore.csv
+          echo "::warning title=Calendar export failed::Removed the stale export; the dashboard will report comparisons unavailable until the next successful run."
 
       - name: Compose commit message
         id: commit_message

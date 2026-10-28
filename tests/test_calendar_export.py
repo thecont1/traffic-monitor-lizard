@@ -108,6 +108,25 @@ def test_failed_write_leaves_the_previous_export_untouched(
     assert leftovers == [], f"temporary files left behind: {leftovers}"
 
 
+def test_a_bad_as_of_is_a_usage_error_not_a_traceback(tmp_path: Path) -> None:
+    traffic = tmp_path / "traffic.csv"
+    write_traffic_csv(traffic)
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(
+            [
+                "--traffic-csv", str(traffic),
+                "--output", str(tmp_path / "out.csv"),
+                "--as-of", "2026-10-24T25:00",
+                "--tod", "weekday_evening",
+                "--quiet",
+            ]
+        )
+
+    assert "cannot parse --as-of" in str(excinfo.value)
+    assert not (tmp_path / "out.csv").exists()
+
+
 def test_header_is_the_documented_contract(exported: list[dict[str, str]]) -> None:
     assert list(exported[0].keys()) == list(EXPORT_COLUMNS)
 
