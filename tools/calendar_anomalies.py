@@ -854,6 +854,14 @@ def generate_anomaly_records(
         Restrict to these route codes (defaults to every route in the frame).
     source_revision
         Provenance string for the export (e.g. a CSV digest).
+
+    Notes
+    -----
+    Scoring always sees the full history up to ``as_of``. Only the *returned*
+    target dates are narrowed to the trailing :data:`LOOKBACK_DAYS` window, so
+    the published file stays bounded while every score keeps its complete
+    preceding cohort — including dates at the boundary, whose reference window
+    opens before the published range.
     """
     as_of_dt = parse_as_of(as_of)
     stamped = (generated_at or city_now()).strftime("%Y-%m-%dT%H:%M:%S")
@@ -890,6 +898,17 @@ def generate_anomaly_records(
         if column not in df.columns:
             df[column] = None
     df = df[list(EXPORT_COLUMNS)]
+
+    # Publish a rolling window, not the whole history. Only target dates inside
+    # [as_of - LOOKBACK_DAYS, as_of] are exported, so the committed CSV stays
+    # bounded. This is a publication filter applied after scoring: a date at the
+    # boundary was still scored against its full preceding cohort above, which
+    # reaches further back than the window being published.
+    if not df.empty:
+        window_start = (as_of_dt.date() - timedelta(days=LOOKBACK_DAYS)).isoformat()
+        window_end = as_of_dt.date().isoformat()
+        df = df[(df["date"] >= window_start) & (df["date"] <= window_end)]
+        df = df.reset_index(drop=True)
 
     for column in _INT_COLUMNS:
         df[column] = pd.array(

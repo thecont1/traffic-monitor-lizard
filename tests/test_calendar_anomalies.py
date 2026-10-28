@@ -501,6 +501,78 @@ def test_distance_variation_is_flagged_not_dropped():
     assert row["distance_max_km"] == pytest.approx(11.6)
 
 
+# ── Published window ─────────────────────────────────────────────────────
+
+
+def test_publishes_only_target_dates_inside_the_trailing_window():
+    """Scoring is full-history; publication is bounded to the last 90 days."""
+    rows = flat_friday_history(12, 30.0)
+    rows += day_rows(FRIDAY, {h: 45.0 for h in SLOTS})
+    rows += day_rows("2026-07-10", {h: 40.0 for h in SLOTS})  # 105 days before FRIDAY
+    result = generate_anomaly_records(
+        prepare_observations(frame(rows)),
+        as_of=night_before(FRIDAY),
+        specs=[EVENING],
+        route_codes=["R1"],
+    )
+
+    published = set(result["date"])
+    assert "2026-07-10" not in published
+    # as_of = 2026-10-24T00:30 → the window opens on 2026-07-26.
+    assert min(published) >= "2026-07-26"
+    assert max(published) <= "2026-10-24"
+    assert FRIDAY in published
+
+
+def test_boundary_date_keeps_the_reference_cohort_that_predates_the_window():
+    """A date at the window edge is scored against history the file never shows."""
+    boundary = "2026-07-24"  # a Friday
+    as_of_day = (date.fromisoformat(boundary) + timedelta(days=90)).isoformat()
+
+    rows = [
+        (day, f"{hour:02d}:10", "R1", 30.0, 10.0)
+        for day in prior_fridays(12, end=boundary)
+        for hour in SLOTS
+    ]
+    rows += day_rows(boundary, {h: 60.0 for h in SLOTS})
+
+    result = generate_anomaly_records(
+        prepare_observations(frame(rows)),
+        as_of=as_of_day + "T00:30",
+        specs=[EVENING],
+        route_codes=["R1"],
+    )
+
+    # Every reference Friday is older than the window, so the published rows are
+    # the boundary date and the (empty) evaluation day — and the boundary still
+    # sees all twelve references.
+    assert set(result["date"]) == {boundary, as_of_day}
+    record = result[result["date"] == boundary].iloc[0]
+    assert pd.isna(result[result["date"] == as_of_day]["category"]).all()
+    assert int(record["reference_days"]) == 12
+    assert record["reference_start"] < boundary
+    assert record["typical_minutes"] == pytest.approx(30.0)
+    assert record["category"] == CATEGORY_MUCH_WORSE
+
+
+def test_window_filter_does_not_change_the_category_of_an_in_window_day():
+    """Same target, same inputs, different as_of → identical result."""
+    rows = flat_friday_history(12, 30.0) + day_rows(FRIDAY, {h: 45.0 for h in SLOTS})
+    obs = prepare_observations(frame(rows))
+
+    tight = generate_anomaly_records(obs, as_of=night_before(FRIDAY), specs=[EVENING])
+    wide = generate_anomaly_records(
+        obs,
+        as_of=(date.fromisoformat(FRIDAY) + timedelta(days=30)).isoformat() + "T00:30",
+        specs=[EVENING],
+    )
+
+    tight_row = tight[tight["date"] == FRIDAY].iloc[0]
+    wide_row = wide[wide["date"] == FRIDAY].iloc[0]
+    for column in ("category", "status", "typical_minutes", "delta_minutes", "rank_score", "reference_days"):
+        assert tight_row[column] == wide_row[column], column
+
+
 def test_audit_payload_reconstructs_the_category():
     rows = flat_friday_history(12, 30.0)
     rows += day_rows(FRIDAY, {h: 45.0 for h in SLOTS})
